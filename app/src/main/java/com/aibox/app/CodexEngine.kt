@@ -344,6 +344,46 @@ object CodexEngine {
         return total
     }
 
+    /** 一键安装常用开发工具链（python/git/node/gcc/make 等，装到应用目录，无需 root） */
+    fun installToolchain(ctx: Context, onStatus: (String) -> Unit, onDone: (Boolean, String) -> Unit) {
+        Thread {
+            val p = paths(ctx)
+            val script = """
+                export PREFIX=${p.prefix.absolutePath}
+                export HOME=${p.home.absolutePath}
+                export LD_LIBRARY_PATH=${p.lib.absolutePath}
+                export PATH=${p.bin.absolutePath}:$$PATH
+                export TMPDIR=${p.tmp.absolutePath}
+                export SSL_CERT_FILE=${p.prefix.absolutePath}/etc/ssl/certs/ca-certificates.crt
+                export CURL_CA_BUNDLE=$$SSL_CERT_FILE
+                echo "--- apt update ---"
+                apt update 2>&1 || exit 10
+                echo "--- apt install ---"
+                apt install -y python git nodejs make gcc clang openssh 2>&1 || exit 11
+                echo "--- done ---"
+                python --version 2>&1; git --version 2>&1; node --version 2>&1; gcc --version 2>&1 | head -1
+            """.trimIndent()
+            try {
+                val bash = File(p.bin, "bash")
+                if (!bash.exists()) { onDone(false, "引擎环境不存在，请先初始化引擎"); return@Thread }
+                val pb = ProcessBuilder(bash.absolutePath, "-c", script)
+                pb.environment().putAll(env(p))
+                pb.redirectErrorStream(true)
+                val proc = pb.start()
+                proc.inputStream.bufferedReader().useLines { lines ->
+                    lines.forEach { line ->
+                        val l = line.trim()
+                        if (l.isNotEmpty()) onStatus(l.take(120))
+                    }
+                }
+                val code = proc.waitFor()
+                onDone(code == 0, if (code == 0) "工具链安装完成" else "安装失败（退出码 $code），请检查网络后重试")
+            } catch (e: Exception) {
+                onDone(false, "安装失败：${e.message ?: e.javaClass.simpleName}")
+            }
+        }.start()
+    }
+
     /** 删除全部引擎数据（清除后需重新下载安装） */
     fun clearEngineData(ctx: Context) {
         try { File(ctx.filesDir, "codex").deleteRecursively() } catch (_: Exception) {}
