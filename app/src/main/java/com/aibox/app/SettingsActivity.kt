@@ -211,6 +211,7 @@ class SettingsActivity : AppCompatActivity() {
                     CodexEngine.PROVIDER_GROQ -> "gsk_…"
                     CodexEngine.PROVIDER_DEEPSEEK -> "sk-…"
                     CodexEngine.PROVIDER_AGNES -> "sk-…"
+                    CodexEngine.PROVIDER_OPENAI -> "sk-…（OpenAI 官方 Key）"
                     else -> "sk-or-…"
                 }
                 refreshEngine()

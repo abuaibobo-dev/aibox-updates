@@ -34,6 +34,7 @@ object CodexEngine {
     const val PROVIDER_OPENROUTER = "openrouter"
     const val PROVIDER_GROQ = "groq"
     const val PROVIDER_AGNES = "agnes"
+    const val PROVIDER_OPENAI = "openai"
 
     /** 实测确认 /responses 严格校验、拒绝 custom 工具（apply_patch）的供应商。
      *  DeepSeek 走本地转接头（DeepSeekAdapter），custom 工具必被剥离，故引擎侧一并关闭，
@@ -41,6 +42,7 @@ object CodexEngine {
     private val APPLY_PATCH_DISABLED = setOf(PROVIDER_AGNES, PROVIDER_GROQ, PROVIDER_DEEPSEEK)
 
     val PROVIDER_LABELS = listOf(
+        PROVIDER_OPENAI to "OpenAI（GPT-5 · Codex 同款）",
         PROVIDER_OPENROUTER to "OpenRouter（GPT-4o-mini）",
         PROVIDER_DEEPSEEK to "DeepSeek（本地转接头）",
         PROVIDER_AGNES to "Agnes（聚合 · 已实测可用）",
@@ -108,6 +110,7 @@ object CodexEngine {
         PROVIDER_DEEPSEEK -> "ds_key"
         PROVIDER_GROQ -> "gsk_key"
         PROVIDER_AGNES -> "agnes_key"
+        PROVIDER_OPENAI -> "openai_key"
         else -> "or_key"
     }
 
@@ -115,6 +118,7 @@ object CodexEngine {
         PROVIDER_DEEPSEEK -> "deepseek-v4-flash"
         PROVIDER_GROQ -> "llama-3.3-70b-versatile"
         PROVIDER_AGNES -> "agnes-2.5-flash"
+        PROVIDER_OPENAI -> "gpt-5"
         else -> "openai/gpt-4o-mini"
     }
 
@@ -122,6 +126,7 @@ object CodexEngine {
         PROVIDER_DEEPSEEK -> "https://api.deepseek.com"
         PROVIDER_GROQ -> "https://api.groq.com/openai/v1"
         PROVIDER_AGNES -> "https://apihub.agnes-ai.cn/v1"
+        PROVIDER_OPENAI -> "https://api.openai.com/v1"
         else -> "https://openrouter.ai/api/v1"
     }
 
