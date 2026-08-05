@@ -1,0 +1,437 @@
+package com.aibox.app
+
+import android.content.Context
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.IOException
+import java.util.Timer
+import java.util.TimerTask
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * 直连 DeepSeek 标准 /chat/completions（绕开 codex 引擎与本地转接头）。
+ *
+ * - 流式；15 秒内未收到首个数据块时自动降级为非流式再试一次。
+ * - 支持工具调用循环：exec_command / read_file / write_file，
+ *   DeepSeek 返回 tool_calls -> App 执行 -> 回填 -> 继续，直到输出文本。
+ */
+object DeepSeekDirect {
+
+    private const val API = "https://api.deepseek.com/chat/completions"
+    private const val MODEL = "deepseek-chat"
+    private const val MAX_ROUNDS = 8
+    private const val TOOL_TIMEOUT_SEC = 30L
+    private const val OUT_LIMIT = 8000
+    private val JSON = "application/json; charset=utf-8".toMediaType()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(240, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .build()
+
+    data class ToolCall(val id: String, val name: String, val arguments: String)
+    data class TurnResult(val text: String, val toolCalls: List<ToolCall>, val usageTokens: Long)
+
+    private fun tools(): JSONArray = JSONArray()
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "web_search")
+                .put("description", "联网搜索互联网，返回相关网页的标题、链接和摘要。适合查询最新资讯、事实、文档等。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("query", JSONObject().put("type", "string").put("description", "搜索关键词，尽量简洁明确"))
+                    )
+                    .put("required", JSONArray().put("query"))
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "exec_command")
+                .put("description", "在手机的沙盒工作目录里执行一条 bash 命令并返回输出。可用于运行脚本、处理文件、查看目录等。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("cmd", JSONObject().put("type", "string").put("description", "要执行的命令，例如 ls -la"))
+                    )
+                    .put("required", JSONArray().put("cmd"))
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "read_file")
+                .put("description", "读取工作目录中的文本文件内容。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("path", JSONObject().put("type", "string").put("description", "相对工作目录的文件路径，例如 notes/a.txt"))
+                    )
+                    .put("required", JSONArray().put("path"))
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "write_file")
+                .put("description", "在工作目录中写入/覆盖一个文本文件。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("path", JSONObject().put("type", "string").put("description", "相对工作目录的文件路径，例如 notes/a.txt"))
+                        .put("content", JSONObject().put("type", "string").put("description", "文件完整内容"))
+                    )
+                    .put("required", JSONArray().put("path").put("content"))
+                )))
+
+    /** 带工具循环的对话入口 */
+    fun chatWithTools(ctx: Context, history: List<Pair<String, String>>, prompt: String, key: String,
+                      onDelta: (String) -> Unit, onTool: (String, String) -> Unit,
+                      onUsage: (Long) -> Unit = {},
+                      onDone: (String) -> Unit, onError: (String) -> Unit) {
+        Thread {
+            val msgs = buildMessages(history, prompt)
+            try {
+                var round = 0
+                var totalUsed = 0L
+                while (true) {
+                    round++
+                    if (round > MAX_ROUNDS) {
+                        onError("工具循环超过 $MAX_ROUNDS 轮仍未结束，已停止")
+                        return@Thread
+                    }
+                    val turn = requestTurn(msgs, key) { d -> onDelta(d) }
+                    totalUsed += turn.usageTokens
+                    if (turn.usageTokens > 0) onUsage(totalUsed)
+                    if (turn.toolCalls.isNotEmpty()) {
+                        // 把 assistant 的工具调用声明写回历史
+                        val tcs = JSONArray()
+                        for (tc in turn.toolCalls) {
+                            tcs.put(JSONObject()
+                                .put("id", tc.id)
+                                .put("type", "function")
+                                .put("function", JSONObject().put("name", tc.name).put("arguments", tc.arguments)))
+                        }
+                        msgs.put(JSONObject().put("role", "assistant").put("content", "").put("tool_calls", tcs))
+                        for (tc in turn.toolCalls) {
+                            val result = executeTool(ctx, tc)
+                            onTool(tc.name, describeTool(tc, result))
+                            msgs.put(JSONObject()
+                                .put("role", "tool")
+                                .put("tool_call_id", tc.id)
+                                .put("content", result.take(OUT_LIMIT)))
+                        }
+                        continue
+                    }
+                    onDone(turn.text)
+                    return@Thread
+                }
+            } catch (e: Exception) {
+                onError("请求失败：${e.javaClass.simpleName} ${e.message ?: ""}")
+            }
+        }.start()
+    }
+
+    private fun describeTool(tc: ToolCall, result: String): String {
+        val brief = result.replace('\n', ' ').trim().take(80)
+        return when (tc.name) {
+            "exec_command" -> try {
+                val j = JSONObject(tc.arguments)
+                j.optString("cmd").take(60) + if (brief.isNotEmpty()) " → $brief" else ""
+            } catch (_: Exception) { tc.arguments.take(60) }
+            else -> tc.arguments.take(60)
+        }
+    }
+
+    /** 单轮请求：流式，首包 15s 超时自动降级非流式 */
+    private fun requestTurn(msgs: JSONArray, key: String, onDelta: (String) -> Unit): TurnResult {
+        val streamed = tryStream(msgs, key, onDelta)
+        if (streamed != null) return streamed
+        return nonStream(msgs, key, onDelta)
+    }
+
+    private fun tryStream(msgs: JSONArray, key: String, onDelta: (String) -> Unit): TurnResult? {
+        val body = JSONObject().put("model", MODEL).put("stream", true)
+            .put("messages", msgs).put("tools", tools()).put("tool_choice", "auto").toString()
+        val req = Request.Builder().url(API)
+            .header("Authorization", "Bearer $key")
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody(JSON))
+            .build()
+        val first = AtomicBoolean(false)
+        client.newCall(req).execute().use { resp ->
+            if (resp.code !in 200..299) {
+                val err = resp.body?.string().orEmpty().take(300)
+                throw IOException("DeepSeek HTTP ${resp.code}：$err")
+            }
+            val timer = Timer("ds-first-chunk", false)
+            timer.schedule(object : TimerTask() {
+                override fun run() { if (!first.get()) { try { resp.close() } catch (_: Exception) {} } }
+            }, 15000L)
+            try {
+                val source = resp.body!!.source()
+                val sb = StringBuilder()
+                var used = 0L
+                val calls = LinkedHashMap<Int, Triple<String, String, StringBuilder>>() // index -> (id,name,args)
+                var line: String?
+                while (true) {
+                    line = source.readUtf8Line()
+                    if (line == null) {
+                        if (!first.get()) return null  // 首包超时，降级
+                        break
+                    }
+                    val t = line.trim()
+                    if (!t.startsWith("data:")) continue
+                    val data = t.substring(5).trim()
+                    if (data == "[DONE]") break
+                    val chunk = try { JSONObject(data) } catch (_: Exception) { continue }
+                    val choices = chunk.optJSONArray("choices")
+                    val usageObj = chunk.optJSONObject("usage")
+                    if (usageObj != null) {
+                        val t = usageObj.optLong("total_tokens")
+                        if (t > 0) used = t
+                    }
+                    if (choices == null || choices.length() == 0) continue
+                    val delta = choices.getJSONObject(0).optJSONObject("delta") ?: continue
+                    val content = delta.optString("content")
+                    if (content.isNotEmpty()) {
+                        first.set(true)
+                        sb.append(content)
+                        onDelta(content)
+                    }
+                    val tcs = delta.optJSONArray("tool_calls")
+                    if (tcs != null) {
+                        first.set(true)
+                        for (i in 0 until tcs.length()) {
+                            val tc = tcs.getJSONObject(i)
+                            val idx = tc.optInt("index", -1).let { if (it >= 0) it else i }
+                            val fn = tc.optJSONObject("function")
+                            val entry = calls.getOrPut(idx) {
+                                Triple(tc.optString("id").ifEmpty { "call_$idx" }, fn?.optString("name").orEmpty(), StringBuilder())
+                            }
+                            val arg = fn?.optString("arguments").orEmpty()
+                            if (arg.isNotEmpty()) entry.third.append(arg)
+                        }
+                    }
+                }
+                timer.cancel()
+                if (!first.get()) return null
+                val toolCalls = calls.values.map { ToolCall(it.first, it.second, it.third.toString()) }
+                return TurnResult(sb.toString(), toolCalls, used)
+            } catch (e: Exception) {
+                timer.cancel()
+                if (!first.get()) return null
+                throw e
+            }
+        }
+    }
+
+    private fun nonStream(msgs: JSONArray, key: String, onDelta: (String) -> Unit): TurnResult {
+        val body = JSONObject().put("model", MODEL).put("stream", false)
+            .put("messages", msgs).put("tools", tools()).put("tool_choice", "auto").toString()
+        val req = Request.Builder().url(API)
+            .header("Authorization", "Bearer $key")
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody(JSON))
+            .build()
+        client.newCall(req).execute().use { resp ->
+            if (resp.code !in 200..299) {
+                val err = resp.body?.string().orEmpty().take(300)
+                throw IOException("DeepSeek HTTP ${resp.code}：$err")
+            }
+            val j = JSONObject(resp.body!!.string())
+            val choices = j.optJSONArray("choices")
+            if (choices == null || choices.length() == 0) throw IOException("DeepSeek 返回空响应")
+            val msg = choices.getJSONObject(0).optJSONObject("message") ?: JSONObject()
+            val text = msg.optString("content")
+            if (text.isNotBlank()) {
+                onDelta(text)
+            }
+            val tcs = msg.optJSONArray("tool_calls")
+            val calls = mutableListOf<ToolCall>()
+            if (tcs != null) for (i in 0 until tcs.length()) {
+                val tc = tcs.getJSONObject(i)
+                val fn = tc.optJSONObject("function")
+                calls.add(ToolCall(
+                    tc.optString("id").ifEmpty { "call_$i" },
+                    fn?.optString("name").orEmpty(),
+                    fn?.optString("arguments").orEmpty()))
+            }
+            if (text.isBlank() && calls.isEmpty()) throw IOException("DeepSeek 返回空内容")
+            val usage = j.optJSONObject("usage")
+            val used = usage?.optLong("total_tokens") ?: 0L
+            return TurnResult(text, calls, used)
+        }
+    }
+
+    // ---------------- 工具执行 ----------------
+
+    private fun workDir(ctx: Context): File =
+        File(ctx.filesDir, "codex/work").apply { mkdirs() }
+
+    private fun executeTool(ctx: Context, tc: ToolCall): String {
+        return try {
+            when (tc.name) {
+                "exec_command" -> {
+                    val j = JSONObject(tc.arguments)
+                    runShell(ctx, j.optString("cmd"))
+                }
+                "read_file" -> {
+                    val j = JSONObject(tc.arguments)
+                    val f = resolveInWorkDir(ctx, j.optString("path"))
+                    if (f == null) "错误：路径超出工作目录，仅允许访问 work 目录内文件"
+                    else if (!f.exists()) "错误：文件不存在 ${f.absolutePath}"
+                    else f.readText().take(OUT_LIMIT)
+                }
+                "write_file" -> {
+                    val j = JSONObject(tc.arguments)
+                    val f = resolveInWorkDir(ctx, j.optString("path"))
+                    if (f == null) "错误：路径超出工作目录，仅允许访问 work 目录内文件"
+                    else {
+                        f.parentFile?.mkdirs()
+                        f.writeText(j.optString("content"))
+                        "已写入 ${f.absolutePath}（${f.length()} 字节）"
+                    }
+                }
+                "web_search" -> {
+                    val j = JSONObject(tc.arguments)
+                    webSearch(j.optString("query"))
+                }
+                else -> "错误：未知工具 ${tc.name}"
+            }
+        } catch (e: Exception) {
+            "工具执行失败：${e.javaClass.simpleName} ${e.message ?: ""}"
+        }
+    }
+
+    /** DuckDuckGo HTML 搜索：解析前 5 条结果的标题/链接/摘要 */
+    private fun webSearch(query: String): String {
+        if (query.isBlank()) return "错误：搜索关键词为空"
+        val url = "https://html.duckduckgo.com/html/?q=" + java.net.URLEncoder.encode(query.trim(), "UTF-8")
+        val req = Request.Builder().url(url)
+            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10)")
+            .build()
+        val html = client.newCall(req).execute().use { resp ->
+            if (resp.code !in 200..299) return@use "搜索失败（HTTP ${resp.code}）"
+            resp.body?.string().orEmpty()
+        }
+        if (html.startsWith("搜索失败")) return html
+        val linkRe = Regex("""class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
+        val snipRe = Regex("""class="result__snippet"[^>]*>(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
+        val links = linkRe.findAll(html).take(5).toList()
+        if (links.isEmpty()) return "未找到相关结果：$query"
+        val snips = snipRe.findAll(html).take(5).toList()
+        val sb = StringBuilder("“$query”的搜索结果：\n")
+        links.forEachIndexed { i, m ->
+            val title = cleanHtml(m.groupValues[2])
+            val href = decodeDdgUrl(m.groupValues[1])
+            val snip = if (i < snips.size) cleanHtml(snips[i].groupValues[1]) else ""
+            sb.append("${i + 1}. ").append(title).append('\n')
+            sb.append("   ").append(href).append('\n')
+            if (snip.isNotEmpty()) sb.append("   ").append(snip).append('\n')
+        }
+        return sb.toString().take(OUT_LIMIT)
+    }
+
+    private fun cleanHtml(s: String): String {
+        val noTag = Regex("""<[^>]+>""").replace(s, "").trim()
+        return android.text.Html.fromHtml(noTag, android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
+    }
+
+    private fun decodeDdgUrl(href: String): String {
+        val u = if (href.startsWith("//duckduckgo.com/l/?uddg=")) {
+            href.substringAfter("uddg=").substringBefore("&")
+        } else href
+        return try { java.net.URLDecoder.decode(u, "UTF-8") } catch (_: Exception) { u }
+    }
+
+    private fun resolveInWorkDir(ctx: Context, raw: String): File? {
+        val work = workDir(ctx).absoluteFile
+        val f = File(work, raw.trimStart('/')).absoluteFile
+        return if (f.absolutePath.startsWith(work.absolutePath + File.separator) || f.absolutePath == work.absolutePath) f else null
+    }
+
+    private fun runShell(ctx: Context, cmd: String): String {
+        val p = CodexEngine.paths(ctx)
+        val bash = File(p.bin, "bash")
+        if (!bash.exists()) return "错误：运行环境未安装（bash 不存在），请先初始化引擎"
+        val pb = ProcessBuilder(bash.absolutePath, "-c", cmd)
+        val basePath = System.getenv("PATH") ?: "/system/bin:/system/xbin"
+        pb.environment().apply {
+            put("HOME", p.home.absolutePath)
+            put("PREFIX", p.prefix.absolutePath)
+            put("PATH", "${p.bin.absolutePath}:$basePath")
+            put("LD_LIBRARY_PATH", p.lib.absolutePath)
+            put("TMPDIR", p.tmp.absolutePath)
+            put("TERM", "xterm-256color")
+        }
+        pb.directory(workDir(ctx))
+        pb.redirectErrorStream(true)
+        return try {
+            val proc = pb.start()
+            val out = StringBuilder()
+            val reader = Thread {
+                proc.inputStream.bufferedReader().use { r ->
+                    var line: String?
+                    while (true) {
+                        line = r.readLine() ?: break
+                        if (out.length < OUT_LIMIT * 2) out.append(line).append('\n')
+                    }
+                }
+            }
+            reader.start()
+            val finished = proc.waitFor(TOOL_TIMEOUT_SEC, TimeUnit.SECONDS)
+            reader.join(2000)
+            if (!finished) {
+                proc.destroyForcibly()
+                "命令超时（${TOOL_TIMEOUT_SEC}s），已终止：$cmd"
+            } else {
+                val text = out.toString().trim()
+                if (text.isEmpty()) "(命令执行完成，无输出) 退出码 ${proc.exitValue()}"
+                else text.take(OUT_LIMIT) + if (text.length > OUT_LIMIT) "\n…(输出已截断)" else ""
+            }
+        } catch (e: Exception) {
+            "命令启动失败：${e.javaClass.simpleName} ${e.message ?: ""}"
+        }
+    }
+
+    /** 组装 messages：合并连续同角色消息，过滤系统/占位内容 */
+    private fun buildMessages(history: List<Pair<String, String>>, prompt: String): JSONArray {
+        val out = JSONArray()
+        // 简洁回复约束：直给答案、不客套、不重复问题，除非用户要求详细
+        out.put(JSONObject().put("role", "system").put("content",
+            "你是一个简洁的助手。直接给答案，不要客套话，不要复述问题，不要多余的铺垫和总结。" +
+            "除非用户明确要求详细解释，否则回复控制在 3~5 句以内；能用列表就用短列表。"))
+        fun append(role: String, content: String) {
+            if (content.isBlank()) return
+            val c = content.trim()
+            if (c.startsWith("⚠️")) return
+            if (c == "思考中…") return
+            if (out.length() > 0) {
+                val last = out.getJSONObject(out.length() - 1)
+                if (last.optString("role") == role) {
+                    last.put("content", last.optString("content") + "\n\n" + c)
+                    return
+                }
+            }
+            out.put(JSONObject().put("role", role).put("content", c))
+        }
+        var firstUser = history.isEmpty()
+        for ((role, content) in history) {
+            if (!firstUser && role == "assistant") {
+                out.put(JSONObject().put("role", "user").put("content", "继续"))
+                firstUser = true
+            }
+            append(role, content)
+            firstUser = true
+        }
+        append("user", prompt)
+        if (out.length() == 0) out.put(JSONObject().put("role", "user").put("content", prompt))
+        return out
+    }
+}
