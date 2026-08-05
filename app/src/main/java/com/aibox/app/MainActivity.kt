@@ -440,7 +440,7 @@ class MainActivity : AppCompatActivity() {
                 onUsage = { total ->
                     main.post {
                         tvTokens.visibility = View.VISIBLE
-                        tvTokens.text = "🪙 " + String.format("%,d", total)
+                        tvTokens.text = "⚡ " + String.format("%,d", total)
                     }
                 },
                 onTool = { name, brief ->

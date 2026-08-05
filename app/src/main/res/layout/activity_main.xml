@@ -53,7 +53,7 @@
                 android:paddingEnd="8dp"
                 android:paddingTop="3dp"
                 android:paddingBottom="3dp"
-                android:text="🪙 0"
+                android:text="⚡ 0"
                 android:textColor="@color/chip_codex_text"
                 android:textSize="11sp"
                 android:visibility="gone"/>

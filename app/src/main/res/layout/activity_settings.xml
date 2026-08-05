@@ -127,6 +127,34 @@
                 android:text="更多供应商（Gemini / SambaNova / 中转站）开发中，暂不可用"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="GitHub Token（引擎推送代码/发布直链用）"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"/>
+
+            <EditText
+                android:id="@+id/etGhToken"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input_gray"
+                android:hint="ghp_… 或 ghp_…"
+                android:inputType="textPassword"
+                android:padding="11dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_placeholder"/>
+
+            <Button
+                android:id="@+id/btnSaveGh"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="10dp"
+                android:text="保存 GitHub Token"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/bg_btn_outline"/>
         </LinearLayout>
 
         <!-- 账户 -->

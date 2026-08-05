@@ -42,6 +42,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnReinit: Button
     private lateinit var btnClear: Button
     private lateinit var btnExportLog: Button
+    private lateinit var etGhToken: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(getSharedPreferences("theme", MODE_PRIVATE).getInt("mode", AppCompatDelegate.MODE_NIGHT_NO))
@@ -228,6 +229,18 @@ class SettingsActivity : AppCompatActivity() {
             CodexEngine.saveApiKey(this, key)
             Toast.makeText(this, "已保存（${CodexEngine.providerLabel(CodexEngine.provider(this))}）", Toast.LENGTH_SHORT).show()
             refreshEngine()
+        }
+
+        etGhToken = findViewById(R.id.etGhToken)
+        etGhToken.setText(CodexEngine.ghToken(this))
+        findViewById<android.widget.Button>(R.id.btnSaveGh).setOnClickListener {
+            val t = etGhToken.text.toString().trim()
+            if (t.isBlank()) {
+                Toast.makeText(this, "请输入 GitHub Token", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            CodexEngine.saveGhToken(this, t)
+            Toast.makeText(this, "GitHub Token 已保存，引擎推送代码时可自动发布直链", Toast.LENGTH_LONG).show()
         }
 
         tvUsage.text = CodexEngine.usageInfo(this)

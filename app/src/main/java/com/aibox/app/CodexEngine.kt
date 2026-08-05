@@ -152,6 +152,17 @@ object CodexEngine {
         try { if (paths(ctx).config.exists()) applyConfig(ctx) } catch (_: Exception) {}
     }
 
+    private const val PREFS_GH = "github"
+
+    /** GitHub Token：引擎 push 代码/发布直链用（本地加密保存） */
+    fun ghToken(ctx: Context): String =
+        CryptoKey.decrypt(ctx, ctx.getSharedPreferences(PREFS_GH, Context.MODE_PRIVATE).getString("token", "") ?: "").trim()
+
+    fun saveGhToken(ctx: Context, token: String) {
+        ctx.getSharedPreferences(PREFS_GH, Context.MODE_PRIVATE)
+            .edit().putString("token", CryptoKey.encrypt(ctx, token.trim())).apply()
+    }
+
     /** 每次启动用内置最新 models.json 覆盖旧文件，避免旧版（枚举值不合法）导致引擎配置 fallback */
     fun syncModels(ctx: Context) {
         val p = paths(ctx)
@@ -179,6 +190,10 @@ object CodexEngine {
                     f.toPath()
                 ) }
             }
+            // git 免密推送脚本：从环境变量 GITHUB_TOKEN 读取，避免 token 落盘
+            val ask = File(p.bin, "git-askpass.sh")
+            ask.writeText("#!/bin/sh\necho \"${'$'}GITHUB_TOKEN\"\n")
+            runCatching { android.system.Os.chmod(ask.absolutePath, 0x1ED) }
         } catch (_: Exception) {}
     }
 
@@ -352,10 +367,10 @@ object CodexEngine {
                 export PREFIX=${p.prefix.absolutePath}
                 export HOME=${p.home.absolutePath}
                 export LD_LIBRARY_PATH=${p.lib.absolutePath}
-                export PATH=${p.bin.absolutePath}:$$PATH
+                export PATH=${p.bin.absolutePath}:${'$'}PATH
                 export TMPDIR=${p.tmp.absolutePath}
                 export SSL_CERT_FILE=${p.prefix.absolutePath}/etc/ssl/certs/ca-certificates.crt
-                export CURL_CA_BUNDLE=$$SSL_CERT_FILE
+                export CURL_CA_BUNDLE=${'$'}SSL_CERT_FILE
                 echo "--- apt update ---"
                 apt update 2>&1 || exit 10
                 echo "--- apt install ---"
@@ -367,7 +382,7 @@ object CodexEngine {
                 val bash = File(p.bin, "bash")
                 if (!bash.exists()) { onDone(false, "引擎环境不存在，请先初始化引擎"); return@Thread }
                 val pb = ProcessBuilder(bash.absolutePath, "-c", script)
-                pb.environment().putAll(env(p))
+                pb.environment().putAll(env(ctx, p))
                 pb.redirectErrorStream(true)
                 val proc = pb.start()
                 proc.inputStream.bufferedReader().useLines { lines ->
@@ -535,16 +550,16 @@ object CodexEngine {
 
     fun version(ctx: Context): String? {
         val p = paths(ctx)
-        val r = runBin(p.codexBin, listOf("--version"), 45, p)
+        val r = runBin(ctx, p.codexBin, listOf("--version"), 45, p)
         lastCheck = r
         return r.output
     }
 
     /** 带超时与错误捕获的执行；output 为空即执行失败 */
-    private fun runBin(bin: File, args: List<String>, timeoutSec: Long, p: Paths): RunResult {
+    private fun runBin(ctx: Context, bin: File, args: List<String>, timeoutSec: Long, p: Paths): RunResult {
         return try {
             val pb = ProcessBuilder(listOf(bin.absolutePath) + args)
-            pb.environment().putAll(env(p))
+            pb.environment().putAll(env(ctx, p))
             pb.redirectErrorStream(true)
             val proc = pb.start()
             val out = AtomicReference<String>()
@@ -613,7 +628,7 @@ object CodexEngine {
                 onStatus("正在验证运行环境…", null)
                 val bash = File(p.bin, "bash")
                 if (bash.exists()) {
-                    val br = runBin(bash, listOf("--version"), 20, p)
+                    val br = runBin(ctx, bash, listOf("--version"), 20, p)
                     if (br.output == null) {
                         throw IOException("运行环境无法执行（${br.detail}）。若反复出现，可能是手机限制应用目录执行二进制，可先“清除数据并重试”")
                     }
@@ -685,7 +700,7 @@ object CodexEngine {
             args += listOf("exec", "--json", "--skip-git-repo-check") + bypass + noApplyPatch + listOf("resume", threadId, prompt)
         }
         val pb = ProcessBuilder(args)
-        pb.environment().putAll(env(p))
+        pb.environment().putAll(env(ctx, p))
         val proc = try {
             pb.start()
         } catch (e: Exception) {
@@ -736,7 +751,7 @@ object CodexEngine {
 
     // ---------------- 内部实现 ----------------
 
-    private fun env(p: Paths): Map<String, String> {
+    private fun env(ctx: Context, p: Paths): Map<String, String> {
         val suPaths = listOf("/system/bin", "/system/xbin", "/sbin", "/su/bin", "/vendor/bin", "/system/sbin")
         val base = System.getenv("PATH") ?: suPaths.joinToString(":")
         // root 检测：存在 su 且可用时加入（引擎可直接执行 su 提权命令）
@@ -744,6 +759,8 @@ object CodexEngine {
             Runtime.getRuntime().exec(arrayOf("su", "-c", "id")).inputStream.bufferedReader().use { it.readLine() } != null
         }.getOrDefault(false)
         val ca = File(p.prefix, "etc/ssl/certs/ca-certificates.crt").absolutePath
+        val gh = ghToken(ctx)
+        val deployRepo = "abuaibobo-dev/aibox-updates"
         return mapOf(
             "HOME" to p.home.absolutePath,
             "CODEX_HOME" to p.codexHome.absolutePath,
@@ -757,7 +774,12 @@ object CodexEngine {
             "SSL_CERT_DIR" to File(p.prefix, "etc/ssl/certs").absolutePath,
             "CURL_CA_BUNDLE" to ca,
             "REQUESTS_CA_BUNDLE" to ca,
-            "GIT_SSL_CAINFO" to ca
+            "GIT_SSL_CAINFO" to ca,
+            "GITHUB_TOKEN" to gh,
+            "GH_TOKEN" to gh,
+            "DEPLOY_REPO" to deployRepo,
+            // git 推送免密：用 token 做 basic auth
+            "GIT_ASKPASS" to p.bin.absolutePath + "/git-askpass.sh"
         )
     }
 
