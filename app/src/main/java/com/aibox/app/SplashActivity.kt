@@ -15,21 +15,32 @@ class SplashActivity : AppCompatActivity() {
     private var moved = false
     private val handler = Handler(Looper.getMainLooper())
 
+    companion object {
+        /** 进程内标记：MainActivity 已展示过（用户没大退）。热启动时跳过启动动画 */
+        @Volatile var enteredMain = false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_splash)
 
+        // 热启动：任务里已有主界面（切后台再回来），不再播动画
+        if (enteredMain) {
+            go()
+            return
+        }
+
+        setContentView(R.layout.activity_splash)
         val video = findViewById<VideoView>(R.id.videoSplash)
         video.setVideoURI(Uri.parse("android.resource://$packageName/${R.raw.splash_video}"))
         video.setOnPreparedListener { mp ->
             mp.isLooping = false
             mp.setVolume(0f, 0f)
-            centerCrop(video, mp)
+            // 布局可能尚未测量完成，等一帧再裁切，避免时满屏时留白
+            video.post { centerCrop(video, mp) }
             video.start()
         }
         video.setOnCompletionListener { go() }
         video.setOnErrorListener { _, _, _ -> go(); true }
-        // 3.5 秒后自动进入首页
         handler.postDelayed({ go() }, 3500)
     }
 

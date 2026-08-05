@@ -344,15 +344,21 @@ class SettingsActivity : AppCompatActivity() {
         try {
             val dir = File(cacheDir, "export").apply { mkdirs() }
             val log = File(filesDir, "codex/run.log")
+            val crash = File(filesDir, "crash.log")
             val f = File(dir, "run.log")
-            f.writeText(if (log.exists()) log.readText() else "（暂无引擎日志）")
+            val sb = StringBuilder()
+            sb.append("===== 崩溃日志 =====\n")
+            sb.append(if (crash.exists()) crash.readText() else "（无崩溃记录）")
+            sb.append("\n\n===== 引擎运行日志 =====\n")
+            sb.append(if (log.exists()) log.readText() else "（暂无引擎日志）")
+            f.writeText(sb.toString())
             val uri = FileProvider.getUriForFile(this, "com.aibox.app.fileprovider", f)
             val share = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(share, "导出引擎日志"))
+            startActivity(Intent.createChooser(share, "导出诊断日志（含崩溃记录）"))
         } catch (e: Exception) {
             Toast.makeText(this, "导出失败：${e.message}", Toast.LENGTH_SHORT).show()
         }

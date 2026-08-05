@@ -217,6 +217,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onResume() {
+        SplashActivity.enteredMain = true
         applyChatBackground()
         super.onResume()
         if (CodexEngine.isInitialized(this)) CodexEngine.applySharedFolder(this)
