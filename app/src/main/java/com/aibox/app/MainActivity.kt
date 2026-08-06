@@ -72,6 +72,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSkill: TextView
     private val pendingAttachments = mutableListOf<File>()
     private var currentSkill: String? = null
+    // 流式回复 UI 节流：累积 delta，主线程合并刷新，避免每字符一次 notifyItemChanged 卡死
+    private var pendingDelta = StringBuilder()
+    private var deltaRefreshQueued = false
     private var quoteMsg: ChatMsg? = null
     private var tts: TextToSpeech? = null
     private val main = Handler(Looper.getMainLooper())
@@ -430,12 +433,20 @@ class MainActivity : AppCompatActivity() {
             ChatForegroundService.start(this)
             DeepSeekDirect.chatWithTools(this, history, fullPrompt, key,
                 onDelta = { d ->
-                    main.post {
-                        armIdle()
-                        sb.append(d)
-                        messages[asstIdx].content = sb.toString()
-                        adapter.notifyItemChanged(asstIdx)
-                        scrollBottom()
+                    synchronized(pendingDelta) { pendingDelta.append(d) }
+                    if (!deltaRefreshQueued) {
+                        deltaRefreshQueued = true
+                        main.post {
+                            deltaRefreshQueued = false
+                            var chunk: String
+                            synchronized(pendingDelta) { chunk = pendingDelta.toString(); pendingDelta.clear() }
+                            if (chunk.isEmpty()) return@post
+                            armIdle()
+                            sb.append(chunk)
+                            messages[asstIdx].content = sb.toString()
+                            adapter.notifyItemChanged(asstIdx)
+                            recycler.scrollToPosition(messages.size - 1)
+                        }
                     }
                 },
                 onUsage = { total ->
@@ -496,11 +507,22 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                     "text" -> {
-                        sb.append(ev.text)
-                        events.add("text" to ev.text)
-                        messages[asstIdx].content = sb.toString()
-                        adapter.notifyItemChanged(asstIdx)
-                        scrollBottom()
+                        synchronized(pendingDelta) { pendingDelta.append(ev.text) }
+                        if (!deltaRefreshQueued) {
+                            deltaRefreshQueued = true
+                            main.post {
+                                deltaRefreshQueued = false
+                                var chunk: String
+                                synchronized(pendingDelta) { chunk = pendingDelta.toString(); pendingDelta.clear() }
+                                if (chunk.isEmpty()) return@post
+                                armIdle()
+                                sb.append(chunk)
+                                events.add("text" to chunk)
+                                messages[asstIdx].content = sb.toString()
+                                adapter.notifyItemChanged(asstIdx)
+                                recycler.scrollToPosition(messages.size - 1)
+                            }
+                        }
                     }
                     "reasoning" -> {
                         if (ev.text.isNotBlank()) {
@@ -619,13 +641,13 @@ class MainActivity : AppCompatActivity() {
             tts = TextToSpeech(this) { status ->
                 if (status == TextToSpeech.SUCCESS) {
                     tts?.language = Locale.CHINESE
-                    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "aibox")
+                    tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "synaps")
                 } else {
                     Toast.makeText(this, "语音引擎不可用", Toast.LENGTH_SHORT).show()
                 }
             }
         } else {
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "aibox")
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "synaps")
         }
     }
 

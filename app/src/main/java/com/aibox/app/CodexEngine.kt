@@ -828,9 +828,9 @@ object CodexEngine {
     private fun downloadOnce(url: String, dest: File, onProgress: (Long, Long) -> Unit) {
         val existing = if (dest.exists()) dest.length() else 0L
         val req = if (existing > 0)
-            Request.Builder().url(url).header("User-Agent", "AIBox/2.0").header("Range", "bytes=$existing-").build()
+            Request.Builder().url(url).header("User-Agent", "Synaps/2.0").header("Range", "bytes=$existing-").build()
         else
-            Request.Builder().url(url).header("User-Agent", "AIBox/2.0").build()
+            Request.Builder().url(url).header("User-Agent", "Synaps/2.0").build()
         client.newCall(req).execute().use { resp ->
             if (resp.code == 416) return // 本地文件已完整
             if (resp.code !in 200..299 && resp.code != 206) throw IOException("HTTP ${resp.code} from $url")
