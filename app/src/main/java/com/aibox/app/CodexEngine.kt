@@ -680,6 +680,8 @@ object CodexEngine {
                 fixPermissions(p.prefix)
                 // 写入 CA 证书：curl/apt 的 https 才能握手成功
                 syncCerts(ctx)
+                // apt 直接使用真实 prefix，无需 -o Dir= 逐个覆盖
+                writeAptPrefixConfig(p)
 
                 // 先用一个小二进制验证本机能否执行引擎目录里的程序，避免白下载几百 MB
                 onStatus("正在验证运行环境…", null)
@@ -812,26 +814,33 @@ object CodexEngine {
         val ca = File(p.prefix, "etc/ssl/certs/ca-certificates.crt").absolutePath
         val gh = ghToken(ctx)
         val deployRepo = "abuaibobo-dev/aibox-updates"
-        return mapOf(
-            "HOME" to p.home.absolutePath,
-            "CODEX_HOME" to p.codexHome.absolutePath,
-            "PREFIX" to p.prefix.absolutePath,
-            "PATH" to "${p.bin.absolutePath}:$base",
-            "LD_LIBRARY_PATH" to p.lib.absolutePath,
-            "TMPDIR" to p.tmp.absolutePath,
-            "TERM" to "xterm-256color",
-            "NO_COLOR" to "1",
-            "SSL_CERT_FILE" to ca,
-            "SSL_CERT_DIR" to File(p.prefix, "etc/ssl/certs").absolutePath,
-            "CURL_CA_BUNDLE" to ca,
-            "REQUESTS_CA_BUNDLE" to ca,
-            "GIT_SSL_CAINFO" to ca,
-            "GITHUB_TOKEN" to gh,
-            "GH_TOKEN" to gh,
-            "DEPLOY_REPO" to deployRepo,
+        // 可写临时目录：/tmp 在 Android 不可写，统一用引擎 tmp（不存在则创建）
+        try { p.tmp.mkdirs(); android.system.Os.chmod(p.tmp.absolutePath, 0x1FF) } catch (_: Exception) {}
+        // termux-exec：通过 LD_PRELOAD + TERMUX__PREFIX 把 /data/data/com.termux/... 重定向到实际 prefix
+        val termuxExec = File(p.lib, "libtermux-exec-ld-preload.so").takeIf { it.exists() }
+            ?: File(p.lib, "libtermux-exec-direct-ld-preload.so").takeIf { it.exists() }
+        return buildMap {
+            put("HOME", p.home.absolutePath)
+            put("CODEX_HOME", p.codexHome.absolutePath)
+            put("PREFIX", p.prefix.absolutePath)
+            put("TERMUX__PREFIX", p.prefix.absolutePath)
+            put("PATH", "${p.bin.absolutePath}:$base")
+            put("LD_LIBRARY_PATH", p.lib.absolutePath)
+            put("TMPDIR", p.tmp.absolutePath)
+            termuxExec?.let { put("LD_PRELOAD", it.absolutePath) }
+            put("TERM", "xterm-256color")
+            put("NO_COLOR", "1")
+            put("SSL_CERT_FILE", ca)
+            put("SSL_CERT_DIR", File(p.prefix, "etc/ssl/certs").absolutePath)
+            put("CURL_CA_BUNDLE", ca)
+            put("REQUESTS_CA_BUNDLE", ca)
+            put("GIT_SSL_CAINFO", ca)
+            put("GITHUB_TOKEN", gh)
+            put("GH_TOKEN", gh)
+            put("DEPLOY_REPO", deployRepo)
             // git 推送免密：用 token 做 basic auth
-            "GIT_ASKPASS" to p.bin.absolutePath + "/git-askpass.sh"
-        )
+            put("GIT_ASKPASS", p.bin.absolutePath + "/git-askpass.sh")
+        }
     }
 
     private fun parse(line: String): EngineEvent? {
@@ -1021,6 +1030,19 @@ object CodexEngine {
                 }
             } catch (_: Exception) {}
         }
+    }
+
+
+    /** 写 apt 配置：Dir 指向实际 prefix，apt/dpkg 不再依赖 /data/data/com.termux 旧路径 */
+    private fun writeAptPrefixConfig(p: Paths) {
+        try {
+            val dir = File(p.prefix, "etc/apt/apt.conf.d")
+            dir.mkdirs()
+            val f = File(dir, "00-app-prefix.conf")
+            f.writeText("Dir \"" + p.prefix.absolutePath + "\";\n")
+            android.system.Os.chmod(dir.absolutePath, 0x1ED)
+            android.system.Os.chmod(f.absolutePath, 0x1A4)
+        } catch (_: Exception) {}
     }
 
     /** Android 11+ 是否已授予"所有文件访问" */

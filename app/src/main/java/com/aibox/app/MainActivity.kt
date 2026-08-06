@@ -514,6 +514,11 @@ class MainActivity : AppCompatActivity() {
                             messages[asstIdx].content = "⚠️ $e"
                             adapter.notifyItemChanged(asstIdx)
                             doneSave.run()
+                        } else {
+                            // 已收到部分内容后中断：追加提示，避免"说一半停住、无任何提示"
+                            messages[asstIdx].content += "\n\n⚠️（回复中断：$e）"
+                            adapter.notifyItemChanged(asstIdx)
+                            doneSave.run()
                         }
                     }
                 })
