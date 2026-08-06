@@ -64,7 +64,6 @@ class SettingsActivity : AppCompatActivity() {
         btnUpdate = findViewById(R.id.btnUpdate)
         tvUpdate = findViewById(R.id.tvUpdate)
         refreshThemeLabel()
-        refreshBgLabel()
 
         btnUpdate.setOnClickListener {
             btnUpdate.isEnabled = false
@@ -99,6 +98,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         tvBg = findViewById(R.id.tvBg)
+        refreshBgLabel()
         val bgPicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) {
                 runCatching {

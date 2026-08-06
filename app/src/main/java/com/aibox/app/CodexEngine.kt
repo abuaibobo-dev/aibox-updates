@@ -808,10 +808,6 @@ object CodexEngine {
     private fun env(ctx: Context, p: Paths): Map<String, String> {
         val suPaths = listOf("/system/bin", "/system/xbin", "/sbin", "/su/bin", "/vendor/bin", "/system/sbin")
         val base = System.getenv("PATH") ?: suPaths.joinToString(":")
-        // root 检测：存在 su 且可用时加入（引擎可直接执行 su 提权命令）
-        val hasSu = runCatching {
-            Runtime.getRuntime().exec(arrayOf("su", "-c", "id")).inputStream.bufferedReader().use { it.readLine() } != null
-        }.getOrDefault(false)
         val ca = File(p.prefix, "etc/ssl/certs/ca-certificates.crt").absolutePath
         val gh = ghToken(ctx)
         val deployRepo = "abuaibobo-dev/aibox-updates"

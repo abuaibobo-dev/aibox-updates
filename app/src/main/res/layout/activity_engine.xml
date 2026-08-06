@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/img_engine_bg">
+    android:background="@drawable/bg_aurora">
 
     <ScrollView
         android:layout_width="match_parent"
@@ -30,7 +30,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="Synaps 智能体引擎"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/text_primary"
                 android:textSize="22sp"
                 android:textStyle="bold" />
 
@@ -40,7 +40,7 @@
                 android:layout_marginTop="8dp"
                 android:gravity="center"
                 android:text="首次使用需下载运行环境（约 170MB，建议 WiFi）\n完成后无需 Termux，手机本机运行真正的 Codex 智能体"
-                android:textColor="#C9CED6"
+                android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
 
             <LinearLayout
@@ -48,7 +48,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="28dp"
                 android:orientation="vertical"
-                android:background="@drawable/bg_glass_card"
+                android:background="@drawable/bg_card"
                 android:padding="20dp">
 
                 <TextView
@@ -117,7 +117,7 @@
                 android:layout_marginTop="18dp"
                 android:layout_marginBottom="12dp"
                 android:text="大脑：DeepSeek V4 Flash · 引擎：Codex"
-                android:textColor="#C9CED6"
+                android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
         </LinearLayout>
     </ScrollView>
