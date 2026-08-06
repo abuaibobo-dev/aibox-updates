@@ -49,6 +49,7 @@ object CodexEngine {
         PROVIDER_GROQ to "Groq（实验性）"
     )
     private const val URL_BOOTSTRAP = "https://github.com/abuaibobo-dev/aibox-updates/releases/download/v2.0.1/bootstrap-aarch64.zip"
+    private const val URL_TOOLS = "https://github.com/abuaibobo-dev/aibox-updates/releases/download/tools-v1/aibox-static-tools-aarch64.tar.gz"
     private const val URL_CODEX = "https://github.com/abuaibobo-dev/aibox-updates/releases/download/v2.0.1/codex-bin.gz"
     private const val PREFIX_MARK = "/data/data/com.termux/files/usr"
 
@@ -373,39 +374,48 @@ object CodexEngine {
     }
 
     /** 一键安装常用开发工具链（python/git/node/gcc/make 等，装到应用目录，无需 root） */
+    /**
+     * 安装静态编译工具链（绕开 apt：termux 二进制编译期写死 /data/data/com.termux 路径，apt 在此环境不可用）。
+     * 包内含：真静态 BusyBox（自带 wget/sh/tar 等 300+ 命令）+ musl Python 3.12 + ld-musl loader。
+     * 全部为可重定位文件，解压即用，不依赖任何硬编码管道。
+     */
     fun installToolchain(ctx: Context, onStatus: (String) -> Unit, onDone: (Boolean, String) -> Unit) {
         Thread {
-            val p = paths(ctx)
-            val script = """
-                export PREFIX=${p.prefix.absolutePath}
-                export HOME=${p.home.absolutePath}
-                export LD_LIBRARY_PATH=${p.lib.absolutePath}
-                export PATH=${p.bin.absolutePath}:${'$'}PATH
-                export TMPDIR=${p.tmp.absolutePath}
-                export SSL_CERT_FILE=${p.prefix.absolutePath}/etc/ssl/certs/ca-certificates.crt
-                export CURL_CA_BUNDLE=${'$'}SSL_CERT_FILE
-                echo "--- apt update ---"
-                apt update 2>&1 || exit 10
-                echo "--- apt install ---"
-                apt install -y python git nodejs make gcc clang openssh wget 2>&1 || exit 11
-                echo "--- done ---"
-                python --version 2>&1; git --version 2>&1; node --version 2>&1; gcc --version 2>&1 | head -1
-            """.trimIndent()
             try {
-                val bash = File(p.bin, "bash")
-                if (!bash.exists()) { onDone(false, "引擎环境不存在，请先初始化引擎"); return@Thread }
-                val pb = ProcessBuilder(bash.absolutePath, "-c", script)
-                pb.environment().putAll(env(ctx, p))
-                pb.redirectErrorStream(true)
-                val proc = pb.start()
-                proc.inputStream.bufferedReader().useLines { lines ->
-                    lines.forEach { line ->
-                        val l = line.trim()
-                        if (l.isNotEmpty()) onStatus(l.take(120))
-                    }
+                val p = paths(ctx)
+                val tar = File(p.cache, "static-tools.tar.gz")
+                onStatus("正在下载静态工具链（约 26MB）…")
+                download(URL_TOOLS, tar) { cur, total ->
+                    onStatus("下载静态工具链 ${cur / 1024 / 1024}/${total / 1024 / 1024} MB")
                 }
-                val code = proc.waitFor()
-                onDone(code == 0, if (code == 0) "工具链安装完成" else "安装失败（退出码 $code），请检查网络后重试")
+                onStatus("正在解压到引擎目录…")
+                untar(tar, p.prefix)
+                // 软链到 bin，确保 PATH 里直接可用
+                val bin = p.bin
+                fun link(name: String, target: String) {
+                    val f = File(bin, name)
+                    f.delete()
+                    java.nio.file.Files.createSymbolicLink(f.toPath(), java.nio.file.Paths.get(target))
+                }
+                link("busybox", "busybox")
+                link("wget", "busybox")
+                link("sh", "busybox")
+                link("python3", "../lib/python/bin/python3.12")
+                link("python", "../lib/python/bin/python3.12")
+                listOf(File(bin, "busybox"), File(p.prefix, "lib/ld-musl-aarch64.so.1")).forEach {
+                    runCatching { android.system.Os.chmod(it.absolutePath, 0x1ED) }
+                }
+                // 验证可用性：直接用静态 busybox 跑（不依赖引擎 bash/PATH）
+                val bb = File(bin, "busybox")
+                val v = runBin(ctx, bb, listOf("wget", "--version"), 15, p)
+                val py = File(p.prefix, "lib/python/bin/python3.12")
+                val pyOk = runBin(ctx, File(p.lib, "ld-musl-aarch64.so.1"),
+                    listOf("--library-path", p.prefix.absolutePath + "/lib/python/lib", py.absolutePath, "--version"), 20, p)
+                val bbOk = v.output?.contains("BusyBox") == true
+                val pythonOk = pyOk.output?.contains("Python") == true
+                onDone(bbOk && pythonOk,
+                    if (bbOk && pythonOk) "静态工具链就绪：BusyBox + Python 3.12"
+                    else "部分验证失败：busybox=${v.output?.take(80) ?: "?"} python=${pyOk.output?.take(80) ?: "?"}")
             } catch (e: Exception) {
                 onDone(false, "安装失败：${e.message ?: e.javaClass.simpleName}")
             }
@@ -1082,6 +1092,41 @@ object CodexEngine {
         dest.parentFile?.mkdirs()
         GZIPInputStream(FileInputStream(gz)).use { input ->
             FileOutputStream(dest).use { out -> input.copyTo(out) }
+        }
+    }
+
+    /** 解压 tar.gz 到 destDir（保留软链）；包内结构为 prefix/...，与引擎 prefix 合并 */
+    private fun untar(tgz: File, destDir: File) {
+        java.util.zip.GZIPInputStream(FileInputStream(tgz)).use { gz ->
+            org.apache.commons.compress.archivers.tar.TarArchiveInputStream(gz).use { tar ->
+                val buf = ByteArray(128 * 1024)
+                var entry: org.apache.commons.compress.archivers.tar.TarArchiveEntry? =
+                    tar.nextEntry as? org.apache.commons.compress.archivers.tar.TarArchiveEntry
+                while (entry != null) {
+                    val name = entry.name
+                    // 剥掉包内顶层 prefix/ 目录，合并进 destDir
+                    val rel = if (name.startsWith("prefix/")) name.removePrefix("prefix/") else name
+                    val outFile = File(destDir, rel)
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else if (entry.isSymbolicLink) {
+                        outFile.parentFile?.mkdirs()
+                        try {
+                            outFile.delete()
+                            java.nio.file.Files.createSymbolicLink(
+                                outFile.toPath(),
+                                java.nio.file.Paths.get(entry.linkName)
+                            )
+                        } catch (_: Exception) {}
+                    } else {
+                        outFile.parentFile?.mkdirs()
+                        FileOutputStream(outFile).use { out ->
+                            while (true) { val n = tar.read(buf); if (n < 0) break; out.write(buf, 0, n) }
+                        }
+                    }
+                    entry = tar.nextEntry as? org.apache.commons.compress.archivers.tar.TarArchiveEntry
+                }
+            }
         }
     }
 

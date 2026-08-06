@@ -513,7 +513,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="36dp"
                 android:layout_marginTop="10dp"
-                android:text="安装开发工具链（python/git/node/gcc）"
+                android:text="安装静态工具链（python/wget/sh）"
                 android:textColor="@color/text_secondary"
                 android:background="@drawable/bg_btn_outline"/>
 

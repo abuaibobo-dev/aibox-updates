@@ -207,11 +207,11 @@ class SettingsActivity : AppCompatActivity() {
             btnToolchain.isEnabled = false
             btnToolchain.text = "安装中…"
             CodexEngine.installToolchain(this,
-                onStatus = { st -> runOnUiThread { btnToolchain.text = st.take(26) } },
+                onStatus = { st -> runOnUiThread { btnToolchain.text = st.take(30) } },
                 onDone = { ok, msg ->
                     runOnUiThread {
                         btnToolchain.isEnabled = true
-                        btnToolchain.text = "安装开发工具链（python/git/node/gcc）"
+                        btnToolchain.text = "安装静态工具链（python/wget/sh）"
                         Toast.makeText(this, if (ok) "工具链安装完成" else "安装失败：$msg", Toast.LENGTH_LONG).show()
                     }
                 }
