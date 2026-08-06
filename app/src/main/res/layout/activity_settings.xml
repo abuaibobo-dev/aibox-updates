@@ -509,6 +509,15 @@
                 android:background="@drawable/bg_btn_outline"/>
 
             <Button
+                android:id="@+id/btnToolchain"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="10dp"
+                android:text="安装开发工具链（python/git/node/gcc）"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/bg_btn_outline"/>
+
+            <Button
                 android:id="@+id/btnClear"
                 android:layout_width="match_parent"
                 android:layout_height="36dp"

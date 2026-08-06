@@ -41,6 +41,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var tvUpdate: TextView
     private lateinit var btnReinit: Button
     private lateinit var btnClear: Button
+    private lateinit var btnToolchain: Button
     private lateinit var btnExportLog: Button
     private lateinit var etGhToken: EditText
 
@@ -197,6 +198,25 @@ class SettingsActivity : AppCompatActivity() {
         }
         btnReinit = findViewById(R.id.btnReinit)
         btnClear = findViewById(R.id.btnClear)
+        btnToolchain = findViewById(R.id.btnToolchain)
+        btnToolchain.setOnClickListener {
+            if (!CodexEngine.isInitialized(this)) {
+                Toast.makeText(this, "请先初始化引擎", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            btnToolchain.isEnabled = false
+            btnToolchain.text = "安装中…"
+            CodexEngine.installToolchain(this,
+                onStatus = { st -> runOnUiThread { btnToolchain.text = st.take(26) } },
+                onDone = { ok, msg ->
+                    runOnUiThread {
+                        btnToolchain.isEnabled = true
+                        btnToolchain.text = "安装开发工具链（python/git/node/gcc）"
+                        Toast.makeText(this, if (ok) "工具链安装完成" else "安装失败：$msg", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+        }
 
         etKey.setText(CodexEngine.apiKey(this))
         btnProvider.text = CodexEngine.providerLabel(CodexEngine.provider(this))

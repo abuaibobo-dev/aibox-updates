@@ -387,7 +387,7 @@ object CodexEngine {
                 echo "--- apt update ---"
                 apt update 2>&1 || exit 10
                 echo "--- apt install ---"
-                apt install -y python git nodejs make gcc clang openssh 2>&1 || exit 11
+                apt install -y python git nodejs make gcc clang openssh wget 2>&1 || exit 11
                 echo "--- done ---"
                 python --version 2>&1; git --version 2>&1; node --version 2>&1; gcc --version 2>&1 | head -1
             """.trimIndent()
@@ -676,6 +676,7 @@ object CodexEngine {
                 onStatus("正在解压运行环境…", null)
                 unzip(bootZip, p.prefix)
                 applySymlinks(p.prefix)
+                relocatePrefix(p.prefix)
                 fixPermissions(p.prefix)
                 // 写入 CA 证书：curl/apt 的 https 才能握手成功
                 syncCerts(ctx)
@@ -991,6 +992,34 @@ object CodexEngine {
                     Runtime.getRuntime().exec(arrayOf("ln", "-s", target, linkFile.absolutePath)).waitFor()
                 } catch (_: Exception) {}
             }
+        }
+    }
+
+
+    /**
+     * Termux bootstrap 内部把安装路径硬编码为 /data/data/com.termux/files/usr，
+     * 而 App 实际解压到应用私有目录（/data/user/0/com.aibox.app/files/codex/prefix）。
+     * 这里把文本文件（脚本 shebang、apt/dpkg 配置等）里的旧路径全部重写为实际 prefix，
+     * 否则引擎内 apt、curl 等会去找不存在的旧目录。ELF 二进制不处理：
+     * termux 程序运行时靠 $PREFIX 环境变量定位自身（env() 已设置）。
+     */
+    private fun relocatePrefix(prefix: File) {
+        val oldMark = PREFIX_MARK
+        val target = prefix.absolutePath
+        if (oldMark == target) return
+        prefix.walkTopDown().forEach { f ->
+            if (!f.isFile) return@forEach
+            if (f.length() <= 0 || f.length() > 8 * 1024 * 1024) return@forEach
+            try {
+                if (isElf(f)) return@forEach
+                // 只处理文本：含 NUL 字节视为二进制（.gz/.so 等），跳过避免损坏
+                val bytes = f.readBytes()
+                if (bytes.any { it.toInt() == 0 }) return@forEach
+                val text = String(bytes, Charsets.UTF_8)
+                if (text.contains(oldMark)) {
+                    f.writeText(text.replace(oldMark, target), Charsets.UTF_8)
+                }
+            } catch (_: Exception) {}
         }
     }
 
