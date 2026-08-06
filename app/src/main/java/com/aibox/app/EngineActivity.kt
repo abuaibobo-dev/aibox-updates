@@ -42,6 +42,17 @@ class EngineActivity : AppCompatActivity() {
             startInit()
         }
 
+        // 图标：用 RoundedBitmapDrawable 裁成圆形，避免方形图片盖住圆形外框
+        runCatching {
+            val logo = findViewById<android.widget.ImageView>(R.id.imgLogo)
+            val bmp = android.graphics.BitmapFactory.decodeResource(resources, R.drawable.avatar_side)
+            if (bmp != null) {
+                val d = androidx.core.graphics.drawable.RoundedBitmapDrawableFactory.create(resources, bmp)
+                d.isCircular = true
+                d.setAntiAlias(true)
+                logo.setImageDrawable(d)
+            }
+        }
         findViewById<android.widget.ImageView>(R.id.imgLogo)?.startAnimation(
             AnimationUtils.loadAnimation(this, R.anim.pulse)
         )

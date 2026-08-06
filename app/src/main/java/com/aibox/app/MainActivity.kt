@@ -100,11 +100,15 @@ class MainActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(getSharedPreferences("theme", MODE_PRIVATE).getInt("mode", AppCompatDelegate.MODE_NIGHT_NO))
         super.onCreate(savedInstanceState)
         CrashLog.install(applicationContext)
-        // 同步模型/证书是文件 IO，放到后台线程，避免冷启动卡主线程
-        Thread {
-            CodexEngine.syncModels(this)
-            CodexEngine.syncCerts(this)
-        }.start()
+        AnrWatchdog.install(applicationContext)
+        // 同步模型/证书是文件 IO，放到后台线程；且仅在引擎已就绪时做，
+        // 避免与首次初始化的解压/写文件并发导致文件损坏
+        if (CodexEngine.isInitialized(this)) {
+            Thread {
+                CodexEngine.syncModels(this)
+                CodexEngine.syncCerts(this)
+            }.start()
+        }
         db = ChatDb(this)
         setContentView(R.layout.activity_main)
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
@@ -227,7 +231,10 @@ class MainActivity : AppCompatActivity() {
         SplashActivity.enteredMain = true
         applyChatBackground()
         super.onResume()
-        if (CodexEngine.isInitialized(this)) CodexEngine.applySharedFolder(this)
+        // applySharedFolder 内部可能执行 waitFor 等待 ln 命令，必须放后台线程，否则主线程可能被卡死
+        if (CodexEngine.isInitialized(this)) {
+            Thread { CodexEngine.applySharedFolder(this) }.start()
+        }
         refreshEngineState()
         refreshSessions()
         if (!CodexEngine.isInitialized(this)) {

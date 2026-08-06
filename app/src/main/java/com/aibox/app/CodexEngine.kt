@@ -356,11 +356,19 @@ object CodexEngine {
         return "Codex $VERSION"
     }
 
+    @Volatile private var dirCache = -1L
+    @Volatile private var dirCacheAt = 0L
+
+    /** 引擎目录大小；60 秒内重复调用直接返回缓存，避免反复遍历 1.6GB 目录造成磁盘 IO 风暴卡顿 */
     fun dirSize(ctx: Context): Long {
+        val now = System.currentTimeMillis()
+        if (dirCache >= 0 && now - dirCacheAt < 60000) return dirCache
         val root = File(ctx.filesDir, "codex")
         if (!root.exists()) return 0
         var total = 0L
         root.walkBottomUp().forEach { if (it.isFile) total += it.length() }
+        dirCache = total
+        dirCacheAt = now
         return total
     }
 

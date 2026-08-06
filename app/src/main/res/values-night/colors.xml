@@ -11,6 +11,7 @@
     <color name="accent_cyan">#4D6BFE</color>
 
     <color name="glass_fill">#232327</color>
+    <color name="glass_card_fill">#B8232327</color>
     <color name="glass_fill_strong">#2A2A2E</color>
     <color name="glass_input_fill">#2A2A2A</color>
     <color name="glass_header_fill">#1E1E1E</color>

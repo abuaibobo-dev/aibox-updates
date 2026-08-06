@@ -14,9 +14,15 @@ import javax.crypto.spec.GCMParameterSpec
 object CryptoKey {
     private const val ALIAS = "aibox_master"
 
+    @Volatile private var cachedKey: SecretKey? = null
+
     private fun getOrCreateKey(): SecretKey {
+        cachedKey?.let { return it }
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let {
+            cachedKey = it.secretKey
+            return it.secretKey
+        }
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         gen.init(
             KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
@@ -24,7 +30,9 @@ object CryptoKey {
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .build()
         )
-        return gen.generateKey()
+        val key = gen.generateKey()
+        cachedKey = key
+        return key
     }
 
     fun encrypt(_ctx: Context, plain: String): String {
