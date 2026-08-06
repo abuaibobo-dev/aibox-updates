@@ -409,13 +409,56 @@ object CodexEngine {
         try { File(ctx.filesDir, "codex").deleteRecursively() } catch (_: Exception) {}
     }
 
-    /** 最近一次运行的引擎输出日志（stdout + stderr） */
+    /** 追加引擎日志（stdout + stderr）；超过 8MB 时先裁剪保留末尾 2MB，防止日志无限增长拖慢主线程 */
+    fun appendRunLog(ctx: Context, text: String) {
+        try {
+            val f = File(ctx.filesDir, "codex/run.log")
+            f.parentFile?.mkdirs()
+            if (f.exists() && f.length() > 8L * 1024 * 1024) {
+                val keep = 2L * 1024 * 1024
+                val raf = java.io.RandomAccessFile(f, "rw")
+                try {
+                    raf.seek(f.length() - keep)
+                    val tail = ByteArray(keep.toInt())
+                    var off = 0
+                    while (off < tail.size) {
+                        val n = raf.read(tail, off, tail.size - off)
+                        if (n < 0) break
+                        off += n
+                    }
+                    raf.seek(0)
+                    raf.write(tail, 0, off)
+                    raf.setLength(off.toLong())
+                } finally {
+                    raf.close()
+                }
+            }
+            f.appendText(text)
+        } catch (_: Exception) {}
+    }
+
     fun runLog(ctx: Context, maxLines: Int = 60): String {
         return try {
             val f = File(ctx.filesDir, "codex/run.log")
             if (!f.exists()) return "（暂无运行日志，请先发送一条消息）"
-            val lines = f.readLines()
-            lines.takeLast(maxLines).joinToString("\n")
+            val tailBytes = 256L * 1024
+            val text = if (f.length() > tailBytes) {
+                val raf = java.io.RandomAccessFile(f, "r")
+                try {
+                    raf.seek(f.length() - tailBytes)
+                    val buf = ByteArray(tailBytes.toInt())
+                    var off = 0
+                    while (off < buf.size) {
+                        val n = raf.read(buf, off, buf.size - off)
+                        if (n < 0) break
+                        off += n
+                    }
+                    String(buf, 0, off, Charsets.UTF_8).trimStart('\n', '\r')
+                } finally {
+                    raf.close()
+                }
+            } else f.readText()
+            text.lines().takeLast(maxLines).joinToString("\n")
         } catch (e: Exception) {
             "读取日志失败：${e.message}"
         }
@@ -685,11 +728,10 @@ object CodexEngine {
             val ap = DeepSeekAdapter.start(ctx)
             if (ap <= 0) return null
             try {
-                val logF = File(ctx.filesDir, "codex/run.log")
                 val cfgBase = runCatching {
                     Regex("(?m)^base_url = \"([^\"]*)\"").find(paths(ctx).config.readText())?.groupValues?.get(1) ?: "?"
                 }.getOrDefault("?")
-                logF.appendText("\n[App] provider=${provider(ctx)} base_url=$cfgBase adapterPort=$ap keyLen=${apiKey(ctx).length}\n")
+                appendRunLog(ctx, "\n[App] provider=${provider(ctx)} base_url=$cfgBase adapterPort=$ap keyLen=${apiKey(ctx).length}\n")
             } catch (_: Exception) {}
         }
         val args = mutableListOf(p.codexBin.absolutePath)
@@ -717,9 +759,8 @@ object CodexEngine {
         // 不关闭会导致进程卡在 "Reading additional input from stdin..." 永不开始。
         try { proc.outputStream.close() } catch (_: Exception) {}
 
-        val log = File(ctx.filesDir, "codex/run.log")
         try {
-            log.appendText("\n===== ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())} | ${provider(ctx)} | $prompt =====".take(160) + "\n")
+            appendRunLog(ctx, "\n===== ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())} | ${provider(ctx)} | $prompt =====".take(160) + "\n")
         } catch (_: Exception) {}
 
         Thread {
@@ -727,12 +768,12 @@ object CodexEngine {
             var line: String?
             while (true) {
                 line = reader.readLine() ?: break
-                try { log.appendText(line + "\n") } catch (_: Exception) {}
+                appendRunLog(ctx, line + "\n")
                 parse(line)?.let { onEvent(it) }
             }
             reader.close()
             proc.waitFor()
-            try { log.appendText("===== exit=${proc.exitValue()} =====\n") } catch (_: Exception) {}
+            appendRunLog(ctx, "===== exit=${proc.exitValue()} =====\n")
             onEvent(EngineEvent("exit", "exit=${proc.exitValue()}"))
         }.start()
 
@@ -743,7 +784,7 @@ object CodexEngine {
                 while (true) {
                     val n = err.read(buf)
                     if (n < 0) break
-                    try { log.appendText(String(buf, 0, n)) } catch (_: Exception) {}
+                    appendRunLog(ctx, String(buf, 0, n))
                 }
             } catch (_: Exception) {}
         }.start()

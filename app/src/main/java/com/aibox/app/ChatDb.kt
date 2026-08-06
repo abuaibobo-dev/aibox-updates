@@ -8,16 +8,20 @@ import android.database.sqlite.SQLiteOpenHelper
 data class SessionRow(val id: String, val title: String, val created: Long, val updated: Long, val pinned: Boolean = false, val subtitle: String = "", val timeLabel: String = "")
 data class MsgRow(val role: String, val content: String, val ts: Long)
 
-class ChatDb(ctx: Context) : SQLiteOpenHelper(ctx, "aibox.db", null, 2) {
+class ChatDb(ctx: Context) : SQLiteOpenHelper(ctx, "aibox.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE sessions(id TEXT PRIMARY KEY, title TEXT, created INTEGER, updated INTEGER, pinned INTEGER DEFAULT 0)")
         db.execSQL("CREATE TABLE messages(id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, role TEXT, content TEXT, ts INTEGER)")
+        db.execSQL("CREATE INDEX idx_messages_session ON messages(session_id)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
         if (old < 2) {
             try { db.execSQL("ALTER TABLE sessions ADD COLUMN pinned INTEGER DEFAULT 0") } catch (_: Exception) {}
+        }
+        if (old < 3) {
+            try { db.execSQL("CREATE INDEX idx_messages_session ON messages(session_id)") } catch (_: Exception) {}
         }
     }
 

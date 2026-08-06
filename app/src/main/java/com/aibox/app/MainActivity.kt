@@ -100,8 +100,11 @@ class MainActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(getSharedPreferences("theme", MODE_PRIVATE).getInt("mode", AppCompatDelegate.MODE_NIGHT_NO))
         super.onCreate(savedInstanceState)
         CrashLog.install(applicationContext)
-        CodexEngine.syncModels(this)
-        CodexEngine.syncCerts(this)
+        // 同步模型/证书是文件 IO，放到后台线程，避免冷启动卡主线程
+        Thread {
+            CodexEngine.syncModels(this)
+            CodexEngine.syncCerts(this)
+        }.start()
         db = ChatDb(this)
         setContentView(R.layout.activity_main)
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
@@ -113,6 +116,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         drawer = findViewById(R.id.drawerLayout)
+        showCrashNoticeIfAny()
         // 侧栏头像：直接裁剪成圆形，避免覆盖/正方形露边
         runCatching {
             val av = findViewById<ImageView>(R.id.imgAvatarSide)
@@ -246,16 +250,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshSessions() {
-        val list = db.sessions().map { s ->
-            val last = db.lastMessage(s.id)
-            val preview = last?.content?.replace('\n', ' ')?.trim()?.take(32) ?: ""
-            s.copy(subtitle = preview, timeLabel = timeLabel(s.updated))
-        }
-        allSessions.clear(); allSessions.addAll(list)
-        val q = findViewById<android.widget.EditText>(R.id.etSearch)?.text?.toString()?.trim().orEmpty()
-        sessions.clear()
-        sessions.addAll(if (q.isEmpty()) allSessions else allSessions.filter { it.title.contains(q, ignoreCase = true) })
-        sessionAdapter.notifyDataSetChanged()
+        // 数据库查询放到后台线程，避免历史会话多时主线程卡顿
+        Thread {
+            val list = runCatching {
+                db.sessions().map { s ->
+                    val last = db.lastMessage(s.id)
+                    val preview = last?.content?.replace('\n', ' ')?.trim()?.take(32) ?: ""
+                    s.copy(subtitle = preview, timeLabel = timeLabel(s.updated))
+                }
+            }.getOrDefault(emptyList())
+            main.post {
+                allSessions.clear(); allSessions.addAll(list)
+                val q = findViewById<android.widget.EditText>(R.id.etSearch)?.text?.toString()?.trim().orEmpty()
+                sessions.clear()
+                sessions.addAll(if (q.isEmpty()) allSessions else allSessions.filter { it.title.contains(q, ignoreCase = true) })
+                sessionAdapter.notifyDataSetChanged()
+            }
+        }.start()
     }
 
     private fun timeLabel(ts: Long): String {
@@ -323,19 +334,27 @@ class MainActivity : AppCompatActivity() {
     private fun openSession(s: SessionRow) {
         currentSessionId = s.id
         currentThreadId = s.id
-        messages.clear()
-        db.messages(s.id).forEach { m ->
-            messages.add(when (m.role) {
-                "user" -> ChatMsg("user", m.content)
-                "ai" -> ChatMsg("ai", m.content)
-                else -> ChatMsg("sys", m.content)
-            })
-        }
-        adapter.notifyDataSetChanged()
         tvTitle.text = s.title.ifBlank { "未命名对话" }
         layWelcome.visibility = View.GONE
         drawer.closeDrawers()
-        recycler.scrollToPosition(messages.size - 1)
+        // 长对话的消息读取放到后台线程，避免点击会话卡顿
+        Thread {
+            val loaded = runCatching {
+                db.messages(s.id).map { m ->
+                    when (m.role) {
+                        "user" -> ChatMsg("user", m.content)
+                        "ai" -> ChatMsg("ai", m.content)
+                        else -> ChatMsg("sys", m.content)
+                    }
+                }
+            }.getOrDefault(emptyList())
+            main.post {
+                messages.clear()
+                messages.addAll(loaded)
+                adapter.notifyDataSetChanged()
+                recycler.scrollToPosition(messages.size - 1)
+            }
+        }.start()
     }
 
     private fun send() {
@@ -841,6 +860,23 @@ class MainActivity : AppCompatActivity() {
         Unit
     }
 
+    /** 上次启动发生过崩溃时，进主页面弹一次提示，方便拿到堆栈而不是瞎猜 */
+    private fun showCrashNoticeIfAny() {
+        val prefs = getSharedPreferences("crash_notice", MODE_PRIVATE)
+        val lastShown = prefs.getLong("last_shown", 0L)
+        val f = File(filesDir, "crash.log")
+        if (!f.exists()) return
+        val mtime = f.lastModified()
+        if (mtime <= lastShown) return
+        prefs.edit().putLong("last_shown", mtime).apply()
+        val stack = CrashLog.lastCrash(this) ?: return
+        main.postDelayed({
+            if (!isFinishing && !isDestroyed) {
+                Ui.info(this, "上次异常退出", "应用上次发生了一次崩溃，已记录。可到设置→导出诊断日志提交。\n\n$stack")
+            }
+        }, 600)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         try { tts?.stop(); tts?.shutdown() } catch (_: Exception) {}
@@ -874,12 +910,22 @@ class MainActivity : AppCompatActivity() {
     private fun applyChatBackground() {
         val img = findViewById<ImageView>(R.id.chatBg) ?: return
         val f = File(filesDir, "chat_bg.jpg")
-        if (f.exists()) {
-            img.visibility = View.VISIBLE
-            img.setImageBitmap(decodeSampled(f))
-        } else {
+        if (!f.exists()) {
             img.visibility = View.GONE
+            return
         }
+        // 图片解码放到后台线程，避免每次进页面卡主线程
+        Thread {
+            val bmp = decodeSampled(f)
+            main.post {
+                if (bmp != null) {
+                    img.visibility = View.VISIBLE
+                    img.setImageBitmap(bmp)
+                } else {
+                    img.visibility = View.GONE
+                }
+            }
+        }.start()
     }
 
     private fun decodeSampled(f: File): Bitmap? {

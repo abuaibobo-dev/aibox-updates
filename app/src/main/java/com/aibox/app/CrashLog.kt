@@ -15,4 +15,15 @@ object CrashLog {
             Log.e("AIToolbox", "未捕获异常", e)
         }
     }
+
+    /** 取最后一次崩溃的堆栈（crash.log 按块追加，取最后一块） */
+    fun lastCrash(ctx: Context): String? {
+        return try {
+            val f = File(ctx.filesDir, "crash.log")
+            if (!f.exists()) return null
+            val text = f.readText()
+            val blocks = text.split("\n\n").filter { it.isNotBlank() }
+            blocks.lastOrNull()?.take(900)
+        } catch (_: Exception) { null }
+    }
 }

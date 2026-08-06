@@ -450,9 +450,6 @@ object DeepSeekAdapter {
     }
 
     private fun appendLog(ctx: Context, msg: String) {
-        try {
-            val f = File(ctx.filesDir, "codex/run.log")
-            f.appendText("\n[转接头] $msg\n")
-        } catch (_: Exception) {}
+        CodexEngine.appendRunLog(ctx, "\n[转接头] $msg\n")
     }
 }
