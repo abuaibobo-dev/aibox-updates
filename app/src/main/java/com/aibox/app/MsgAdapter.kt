@@ -27,13 +27,16 @@ class MsgAdapter(
         private val CMD_PREFIX = Regex("^\\s*(\\$ |>|>>|# )")
         private val CMD_WORD = Regex("\\b(curl|wget|busybox|tar|gunzip|make|pip|npm|apt)\\b", RegexOption.IGNORE_CASE)
 
-        /** 命中命令/长文本特征的消息默认折叠 */
-        fun shouldCollapse(content: String): Boolean {
+        /** 命中命令特征的消息默认折叠；正常回复（ai）永不折叠 */
+        fun shouldCollapse(content: String, role: String): Boolean {
+            if (role == "ai") return false
             if (content.isBlank()) return false
+            // 工具执行条目（🔧 开头）默认折叠
+            if (role == "sys" && content.startsWith("🔧")) return true
             if (CMD_PREFIX.containsMatchIn(content)) return true
             if (content.contains("% Total", ignoreCase = true)) return true
-            if (CMD_WORD.containsMatchIn(content)) return true
-            return content.length > LIMIT
+            // 用户粘贴的长命令/日志才按长度折叠，避免误伤普通长文本
+            return role == "user" && content.length > LIMIT && CMD_WORD.containsMatchIn(content)
         }
     }
 
@@ -56,7 +59,7 @@ class MsgAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
         val m = items[pos]
-        val collapsible = shouldCollapse(m.content)
+        val collapsible = shouldCollapse(m.content, m.role)
         val shown = if (collapsible && !m.expanded) HINT else m.content
         val click: (View) -> Unit = { if (collapsible) { m.expanded = !m.expanded; notifyItemChanged(pos) } }
         when (holder) {

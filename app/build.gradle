@@ -15,8 +15,8 @@ android {
         applicationId "com.aibox.app"
         minSdk 24
         targetSdk 28
-        versionCode 47
-        versionName "2.4.6"
+        versionCode 48
+        versionName "2.4.7"
     }
 
     buildTypes {

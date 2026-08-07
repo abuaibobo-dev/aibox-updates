@@ -175,6 +175,8 @@ class MainActivity : AppCompatActivity() {
         )
         recycler.layoutManager = LinearLayoutManager(this)
         recycler.adapter = adapter
+        // 关闭条目动画：流式回复每字符 notifyItemChanged，默认淡入淡出动画会导致整屏闪烁
+        recycler.itemAnimator = null
 
         sessionAdapter = SessionAdapter(
             sessions,

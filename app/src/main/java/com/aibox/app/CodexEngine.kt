@@ -390,14 +390,17 @@ object CodexEngine {
                 }
                 onStatus("正在解压到引擎目录…")
                 untar(tar, p.prefix)
-                // 软链到 bin，确保 PATH 里直接可用
+                // 软链到 bin，确保 PATH 里直接可用。
+                // 注意：busybox 是包内真实文件，绝不能删除重建（自引用软链会把工具链弄坏），
+                // 只对 wget/sh 建指向 busybox 的软链。
                 val bin = p.bin
                 fun link(name: String, target: String) {
                     val f = File(bin, name)
-                    f.delete()
-                    java.nio.file.Files.createSymbolicLink(f.toPath(), java.nio.file.Paths.get(target))
+                    if (f.exists() && java.nio.file.Files.isSymbolicLink(f.toPath())) f.delete()
+                    if (!f.exists()) {
+                        java.nio.file.Files.createSymbolicLink(f.toPath(), java.nio.file.Paths.get(target))
+                    }
                 }
-                link("busybox", "busybox")
                 link("wget", "busybox")
                 link("sh", "busybox")
                 link("python3", "../lib/python/bin/python3.12")
