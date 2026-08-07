@@ -174,6 +174,45 @@ object DeepSeekDirect {
         .put(JSONObject()
             .put("type", "function")
             .put("function", JSONObject()
+                .put("name", "schedule_reminder")
+                .put("description", "定时提醒：设置一个 N 秒后的系统通知提醒（如 30秒后提醒我喝水）。用于定时任务/待办提醒。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("seconds", JSONObject().put("type", "integer").put("description", "多少秒后提醒（10~86400）"))
+                        .put("text", JSONObject().put("type", "string").put("description", "提醒内容，简短具体"))
+                    )
+                    .put("required", JSONArray().put("seconds").put("text"))
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "mcp_list_tools")
+                .put("description", "列出 MCP 服务器提供的工具列表。server 留空时使用 设置→MCP 服务器 里配置的地址。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("server", JSONObject().put("type", "string").put("description", "MCP 服务器地址（http(s)://...），留空用设置里的默认地址"))
+                    )
+                    .put("required", JSONArray())
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "mcp_call")
+                .put("description", "调用 MCP 服务器上的一个工具（数据库查询、浏览器操作、系统指令等，取决于服务器提供什么）。server 留空时使用 设置→MCP 服务器 里配置的地址。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("server", JSONObject().put("type", "string").put("description", "MCP 服务器地址，留空用设置里的默认地址"))
+                        .put("tool", JSONObject().put("type", "string").put("description", "要调用的工具名，如 execute_query"))
+                        .put("input", JSONObject().put("type", "object").put("description", "工具参数对象，如 {\"query\":\"SELECT 1\"}"))
+                    )
+                    .put("required", JSONArray().put("tool"))
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
                 .put("name", "shizuku_cmd")
                 .put("description", "以 Shizuku/ADB 级权限执行一条系统命令（需用户在 设置→Shizuku 提权 里启动并授权）。适合 pm install 安装 APK、appops 授权、查看系统属性等。不是 root，无法改 seccomp 或写系统目录。")
                 .put("parameters", JSONObject()
@@ -455,6 +494,18 @@ object DeepSeekDirect {
                     val j = JSONObject(tc.arguments)
                     shizukuCmd(j.optString("cmd"))
                 }
+                "schedule_reminder" -> {
+                    val j = JSONObject(tc.arguments)
+                    scheduleReminder(ctx, j.optLong("seconds", 60), j.optString("text"))
+                }
+                "mcp_list_tools" -> {
+                    val j = JSONObject(tc.arguments)
+                    mcpListTools(ctx, j.optString("server"))
+                }
+                "mcp_call" -> {
+                    val j = JSONObject(tc.arguments)
+                    mcpCall(ctx, j.optString("server"), j.optString("tool"), j.optJSONObject("input") ?: JSONObject())
+                }
                 else -> "错误：未知工具 ${tc.name}"
             }
         } catch (e: Exception) {
@@ -579,6 +630,118 @@ object DeepSeekDirect {
             else text.take(OUT_LIMIT) + (if (text.length > OUT_LIMIT) "\n…(输出已截断)" else "")
         } catch (e: Exception) {
             "Shizuku 执行失败：${e.javaClass.simpleName} ${e.message ?: ""}"
+        }
+    }
+
+    /** 定时提醒：AlarmManager 触发系统通知 */
+    private fun scheduleReminder(ctx: Context, seconds: Long, text: String): String {
+        val t = text.trim()
+        if (t.isBlank()) return "错误：提醒内容不能为空"
+        val delay = seconds.coerceIn(10, 86400)
+        val at = System.currentTimeMillis() + delay * 1000
+        val pi = android.app.PendingIntent.getBroadcast(
+            ctx, (System.currentTimeMillis() % 100000).toInt(),
+            android.content.Intent(ctx, ReminderReceiver::class.java)
+                .putExtra("text", t).putExtra("when", at),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+        val am = ctx.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        try {
+            am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi)
+        } catch (_: Exception) {
+            am.set(android.app.AlarmManager.RTC_WAKEUP, at, pi)
+        }
+        return "已设置提醒：${delay}秒后「$t」"
+    }
+
+    private fun mcpListTools(ctx: Context, server: String): String = mcpRequest(ctx, server, "tools/list", JSONObject())
+
+    private fun mcpCall(ctx: Context, server: String, tool: String, input: JSONObject): String {
+        if (tool.isBlank()) return "错误：tool 不能为空"
+        return mcpRequest(ctx, server, "tools/call", JSONObject().put("name", tool).put("arguments", input))
+    }
+
+    /** MCP Streamable HTTP：initialize 建会话 → 调用 tools/list 或 tools/call，兼容纯 JSON 与 SSE 响应 */
+    private fun mcpRequest(ctx: Context, server: String, method: String, params: JSONObject): String {
+        val url = server.ifBlank {
+            ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).getString("mcp_server", "")?.trim().orEmpty()
+        }
+        if (url.isBlank()) return "错误：请先在 设置→MCP 服务器 填写地址，或在参数 server 中传入"
+        return try {
+            fun post(rpc: JSONObject, session: String? = null): okhttp3.Response {
+                val b = Request.Builder().url(url)
+                    .header("Accept", "application/json, text/event-stream")
+                    .header("Content-Type", "application/json")
+                    .header("MCP-Protocol-Version", "2025-06-18")
+                if (session != null) b.header("Mcp-Session-Id", session)
+                return client.newCall(b.post(rpc.toString().toRequestBody(JSON)).build()).execute()
+            }
+            var session: String? = null
+            val init = JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", "initialize")
+                .put("params", JSONObject()
+                    .put("protocolVersion", "2025-06-18")
+                    .put("capabilities", JSONObject())
+                    .put("clientInfo", JSONObject().put("name", "Synaps").put("version", "2.5.14")))
+            post(init).use { resp ->
+                if (resp.code !in 200..299) return "MCP 连接失败（HTTP ${resp.code}）：${resp.body?.string().orEmpty().take(200)}"
+                session = resp.header("Mcp-Session-Id")
+                parseMcp(resp.body?.string().orEmpty(), "initialize")
+            }
+            try {
+                post(JSONObject().put("jsonrpc", "2.0").put("method", "notifications/initialized"), session).close()
+            } catch (_: Exception) { }
+            val req = JSONObject().put("jsonrpc", "2.0").put("id", 2).put("method", method).put("params", params)
+            post(req, session).use { resp ->
+                if (resp.code !in 200..299) "MCP $method 失败（HTTP ${resp.code}）：${resp.body?.string().orEmpty().take(200)}"
+                else parseMcp(resp.body?.string().orEmpty(), method)
+            }
+        } catch (e: Exception) {
+            "MCP 请求失败：${e.javaClass.simpleName} ${e.message ?: ""}"
+        }
+    }
+
+    /** 解析 MCP 响应：优先 JSON，SSE（data: {...}）则逐行拼 */
+    private fun parseMcp(body: String, method: String): String {
+        val text = if (body.contains("\"jsonrpc\"")) body else {
+            body.lineSequence().filter { it.startsWith("data:") }.map { it.removePrefix("data:").trim() }
+                .filter { it.isNotEmpty() && it != "[DONE]" }
+                .joinToString("\n")
+        }
+        if (text.isBlank()) return "MCP 返回为空"
+        return try {
+            val j = JSONObject(text)
+            if (j.has("error")) "MCP 错误：${j.getJSONObject("error").optString("message")}"
+            else {
+                val result = j.optJSONObject("result")
+                if (result == null) text.take(OUT_LIMIT)
+                else when (method) {
+                    "tools/list" -> {
+                        val arr = result.optJSONArray("tools") ?: JSONArray()
+                        if (arr.length() == 0) "该 MCP 服务器没有可用工具"
+                        else buildString {
+                            for (i in 0 until arr.length()) {
+                                val t = arr.getJSONObject(i)
+                                append("- ").append(t.optString("name"))
+                                if (t.has("description")) append("：").append(t.optString("description").take(80))
+                                append('\n')
+                            }
+                        }.trim()
+                    }
+                    "tools/call" -> {
+                        val content = result.optJSONArray("content") ?: JSONArray()
+                        val sb = StringBuilder()
+                        for (i in 0 until content.length()) {
+                            val c = content.getJSONObject(i)
+                            if (c.optString("type") == "text") sb.append(c.optString("text")) else sb.append(c.toString())
+                            sb.append('\n')
+                        }
+                        val out = sb.toString().trim()
+                        if (result.optBoolean("isError")) "MCP 工具返回错误：$out" else out.ifEmpty { "MCP 调用完成（无返回内容）" }
+                    }
+                    else -> text.take(OUT_LIMIT)
+                }
+            }
+        } catch (_: Exception) {
+            text.take(OUT_LIMIT)
         }
     }
 

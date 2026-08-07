@@ -15,6 +15,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import java.util.Locale
@@ -71,9 +76,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var attachScroll: HorizontalScrollView
     private lateinit var attachBar: LinearLayout
     private lateinit var btnAttach: ImageButton
+    private lateinit var btnVoice: ImageButton
+    private lateinit var btnOcr: ImageButton
     private lateinit var btnModel: TextView
     private lateinit var btnSkill: TextView
     private val pendingAttachments = mutableListOf<File>()
+    /** 识图取字：选图 → ML Kit OCR → 文字进输入框 */
+    private val ocrPicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) runOcr(uri) else Toast.makeText(this, "未选择图片", Toast.LENGTH_SHORT).show()
+    }
     private var currentSkill: String? = null
     // 流式回复 UI 节流：累积 delta，主线程合并刷新，避免每字符一次 notifyItemChanged 卡死
     private var pendingDelta = StringBuilder()
@@ -214,10 +225,16 @@ class MainActivity : AppCompatActivity() {
             findViewById<View>(R.id.quoteBar).visibility = View.GONE
         }
         btnAttach = findViewById(R.id.btnAttach)
+        btnVoice = findViewById(R.id.btnVoice)
+        btnOcr = findViewById(R.id.btnOcr)
         btnModel = findViewById(R.id.btnModel)
         btnSkill = findViewById(R.id.btnSkill)
 
         btnAttach.setOnClickListener { pickAttachment() }
+        btnVoice.setOnClickListener { startVoiceInput() }
+        btnOcr.setOnClickListener {
+            ocrPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }
         btnModel.setOnClickListener { showModelPicker() }
         btnSkill.setOnClickListener { showSkillPicker() }
         refreshModelChip()
@@ -971,16 +988,34 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSkillPicker() {
         val list = CodexEngine.loadSkills(this)
-        if (list.isEmpty()) {
-            Toast.makeText(this, "暂无技能", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val names = list.map { it.first }
-        val labels = list.map { (n, p) -> "$n——${p.take(30)}" }
+        val labels = list.map { (n, p) -> "$n——${p.take(30)}" }.toMutableList()
+        labels.add("🛒 技能商店（一键安装）")
         Ui.sheet(this, "选择技能（引擎可实时更新）", labels) { which ->
-            currentSkill = names[which]
-            btnSkill.text = "技能：${names[which]}"
-            Toast.makeText(this, "技能：${names[which]}", Toast.LENGTH_SHORT).show()
+            if (which == list.size) { showSkillStore(); return@sheet }
+            currentSkill = list[which].first
+            btnSkill.text = "技能：${list[which].first}"
+            Toast.makeText(this, "技能：${list[which].first}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** 技能商店：内置精选技能一键安装（与引擎 manage_skills 共用 skills.json） */
+    private fun showSkillStore() {
+        val store = listOf(
+            "周报生成器" to "根据聊天内容生成结构化周报：本周完成/下周计划/风险与求助，用 Markdown 表格，简洁。",
+            "代码评审" to "作为资深工程师评审代码：先给结论（可合/需改），再列 3~5 条问题按严重程度排序，每条一句话。",
+            "文案润色" to "把用户输入的文案润色得更专业流畅：保持原意，纠正错别字和语法，输出修改后全文。",
+            "翻译助手" to "把用户输入翻译成指定语言（默认中文↔英文），直译为主，术语附注。",
+            "面试模拟" to "扮演面试官按岗位提问，一次一题；用户回答后给出评价和参考答案要点。",
+            "Excel 公式助手" to "根据用户描述的数据需求，给出可直接粘贴的 Excel/WPS 公式并解释用途。",
+            "健康饮食" to "根据用户身高体重和目标，给出每日热量与蛋白质建议，附可执行的三餐示例。"
+        )
+        Ui.sheet(this, "技能商店（点击安装）", store.map { it.first }) { which ->
+            val (n, p) = store[which]
+            val cur = CodexEngine.loadSkills(this).toMutableList()
+            cur.removeAll { it.first == n }
+            cur.add(n to p)
+            CodexEngine.saveSkills(this, cur)
+            Toast.makeText(this, "已安装「$n」，再次点技能按钮即可选中", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1158,6 +1193,50 @@ class MainActivity : AppCompatActivity() {
                 send()
             }
         }
+    }
+
+    /** 选图 OCR：后台识别，结果放入输入框 */
+    private fun runOcr(uri: Uri) {
+        Thread {
+            val text = try {
+                val bmp = decodeSampledUri(uri)
+                val client = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+                val latch = java.util.concurrent.CountDownLatch(1)
+                var res = ""
+                client.process(InputImage.fromBitmap(bmp, 0))
+                    .addOnSuccessListener { r -> res = r.text; latch.countDown() }
+                    .addOnFailureListener { e -> res = "识别失败：${e.message}"; latch.countDown() }
+                latch.await(30, java.util.concurrent.TimeUnit.SECONDS)
+                client.close()
+                res
+            } catch (e: Exception) {
+                "识别失败：${e.message}"
+            }
+            main.post {
+                when {
+                    text.startsWith("识别失败") -> Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+                    text.isBlank() -> Toast.makeText(this, "未识别到文字", Toast.LENGTH_SHORT).show()
+                    else -> {
+                        val cur = etInput.text.toString()
+                        etInput.setText(if (cur.isBlank()) text else "$cur\n$text")
+                        etInput.setSelection(etInput.text.length)
+                        Toast.makeText(this, "已识别 ${text.length} 字，点击发送", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun decodeSampledUri(uri: Uri): Bitmap {
+        val resolver = contentResolver
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        var maxDim = maxOf(bounds.outWidth, bounds.outHeight)
+        while (maxDim > 2048) { sample *= 2; maxDim /= 2 }
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        return resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+            ?: throw Exception("无法解码图片")
     }
 
     private fun applyChatBackground() {

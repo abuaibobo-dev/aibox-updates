@@ -47,6 +47,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var etGhToken: EditText
     private lateinit var tvShizukuStatus: TextView
     private lateinit var btnShizuku: Button
+    private lateinit var etMcp: EditText
+    private lateinit var btnSaveMcp: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(getSharedPreferences("theme", MODE_PRIVATE).getInt("mode", AppCompatDelegate.MODE_NIGHT_NO))
@@ -263,6 +265,15 @@ class SettingsActivity : AppCompatActivity() {
 
         etGhToken = findViewById(R.id.etGhToken)
         etGhToken.setText(CodexEngine.ghToken(this))
+
+        etMcp = findViewById(R.id.etMcp)
+        etMcp.setText(getSharedPreferences("settings", MODE_PRIVATE).getString("mcp_server", ""))
+        btnSaveMcp = findViewById(R.id.btnSaveMcp)
+        btnSaveMcp.setOnClickListener {
+            val v = etMcp.text.toString().trim()
+            getSharedPreferences("settings", MODE_PRIVATE).edit().putString("mcp_server", v).apply()
+            Toast.makeText(this, if (v.isBlank()) "已清空 MCP 地址" else "已保存 MCP 地址", Toast.LENGTH_SHORT).show()
+        }
 
         tvShizukuStatus = findViewById(R.id.tvShizukuStatus)
         btnShizuku = findViewById(R.id.btnShizuku)

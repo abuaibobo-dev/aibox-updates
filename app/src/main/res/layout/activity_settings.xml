@@ -181,6 +181,35 @@
                 android:text="启动/授权 Shizuku"
                 android:textColor="@color/text_secondary"
                 android:background="@drawable/bg_btn_outline"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="MCP 服务器（外部工具桥，可选）"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"/>
+
+            <EditText
+                android:id="@+id/etMcp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/bg_input_gray"
+                android:hint="http://127.0.0.1:8899/mcp（可选，引擎可直连该地址的工具）"
+                android:inputType="textUri"
+                android:padding="11dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_placeholder"/>
+
+            <Button
+                android:id="@+id/btnSaveMcp"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="10dp"
+                android:text="保存 MCP 地址"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/bg_btn_outline"/>
         </LinearLayout>
 
         <!-- 账户 -->

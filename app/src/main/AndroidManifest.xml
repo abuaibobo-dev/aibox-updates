@@ -91,6 +91,10 @@
             android:stopWithTask="false" />
 
         <receiver
+            android:name=".ReminderReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".LatterWidget"
             android:exported="true"
             android:label="Synaps">
