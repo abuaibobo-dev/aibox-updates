@@ -113,12 +113,17 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .createNotificationChannel(NotificationChannel("chat", "对话通知", NotificationManager.IMPORTANCE_LOW))
-        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+        val sPrefs = getSharedPreferences("settings", MODE_PRIVATE)
+        // 引擎能力全开：首次启动一次性请求全部权限；之后仅补通知权限
+        if (!sPrefs.getBoolean("asked_perms", false)) {
+            sPrefs.edit().putBoolean("asked_perms", true).apply()
+            val need = Perms.missing(this)
+            if (need.isNotEmpty()) requestPermissions(need, 9002)
+        } else if (android.os.Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 9002)
         }
-        val sPrefs = getSharedPreferences("settings", MODE_PRIVATE)
         // 开启过"后台保活"则常驻前台服务，切后台不中断
         if (sPrefs.getBoolean("keepalive", false)) {
             ChatForegroundService.start(this)

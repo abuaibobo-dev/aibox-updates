@@ -398,6 +398,9 @@ class SettingsActivity : AppCompatActivity() {
         super.onResume()
         refreshSandboxStatus()
         refreshBatteryLabel()
+        // 引擎能力全开：进入设置页时把尚未授权的权限再请求一遍（已授权的不会重复弹窗）
+        val need = Perms.missing(this)
+        if (need.isNotEmpty()) requestPermissions(need, 9003)
     }
 
     private fun refreshSandboxStatus() {

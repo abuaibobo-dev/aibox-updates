@@ -15,8 +15,8 @@ android {
         applicationId "com.aibox.app"
         minSdk 24
         targetSdk 28
-        versionCode 54
-        versionName "2.5.3"
+        versionCode 55
+        versionName "2.5.4"
     }
 
     signingConfigs {
