@@ -41,6 +41,7 @@ import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import org.json.JSONObject
 import android.provider.OpenableColumns
 import java.io.File
 import java.io.FileOutputStream
@@ -104,6 +105,12 @@ class MainActivity : AppCompatActivity() {
     /** 直连 DeepSeek 断流自动重试计数（每次真实发送重置） */
     private var dsRetries = 0
     private var dsRetrying = false
+    /** 任务计划卡片：-1=未创建；planMsgIdx 指向 messages 中的卡片位置 */
+    private var planMsgIdx = -1
+    private val planSteps = mutableListOf<String>()
+    private val planDone = mutableListOf<Boolean>()
+    /** 用户正在手动滚动/拖动列表时，禁止自动滚动打断 */
+    private var userScrolling = false
     /** 余额自动刷新定时器（60s） */
     private val balanceTicker = object : Runnable {
         override fun run() {
@@ -238,6 +245,13 @@ class MainActivity : AppCompatActivity() {
         recycler.adapter = adapter
         // 关闭条目动画：流式回复每字符 notifyItemChanged，默认淡入淡出动画会导致整屏闪烁
         recycler.itemAnimator = null
+        // 手指在滚动/拖动时不自动滚底，避免"拉到底又跳走"被打断
+        recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(r: RecyclerView, newState: Int) {
+                userScrolling = newState == RecyclerView.SCROLL_STATE_DRAGGING ||
+                    newState == RecyclerView.SCROLL_STATE_SETTLING
+            }
+        })
 
         sessionAdapter = SessionAdapter(
             sessions,
@@ -403,6 +417,7 @@ class MainActivity : AppCompatActivity() {
         drawer.closeDrawers()
         busy = false
         updateSendBtn()
+        resetPlan()
     }
 
     private fun openSession(s: SessionRow) {
@@ -411,6 +426,7 @@ class MainActivity : AppCompatActivity() {
         tvTitle.text = s.title.ifBlank { "未命名对话" }
         layWelcome.visibility = View.GONE
         drawer.closeDrawers()
+        resetPlan()
         // 长对话的消息读取放到后台线程，避免点击会话卡顿
         Thread {
             val loaded = runCatching {
@@ -434,6 +450,7 @@ class MainActivity : AppCompatActivity() {
     private fun send() {
         if (!dsRetrying) dsRetries = 0
         dsRetrying = false
+        resetPlan()
         val text = etInput.text.toString().trim()
         if (text.isEmpty() || busy) return
         if (!CodexEngine.isInitialized(this)) {
@@ -546,8 +563,12 @@ class MainActivity : AppCompatActivity() {
                     }
                 },
                 onUsage = {},
+                onPlanStart = { args -> main.post { createPlanCard(args) } },
+                onPlanStep = { n -> main.post { markPlanStep(n) } },
+                onPlanDone = { main.post { finishPlan() } },
                 onToolStart = { name, brief ->
                     main.post {
+                        if (name == "set_plan" || name.startsWith("plan")) return@post
                         val label = when (name) {
                             "exec_command" -> "🔧 执行命令"
                             "read_file" -> "📄 读取文件"
@@ -562,6 +583,7 @@ class MainActivity : AppCompatActivity() {
                 },
                 onTool = { name, brief ->
                     main.post {
+                        if (name == "set_plan" || name.startsWith("plan")) return@post
                         val label = when (name) {
                             "exec_command" -> "🔧 执行命令"
                             "read_file" -> "📄 读取文件"
@@ -1054,6 +1076,54 @@ class MainActivity : AppCompatActivity() {
         return id
     }
 
+    /** 重置任务计划状态（新发送/切会话时调用） */
+    private fun resetPlan() {
+        planMsgIdx = -1
+        planSteps.clear()
+        planDone.clear()
+    }
+
+    /** 引擎调用 set_plan 时创建计划卡片 */
+    private fun createPlanCard(args: String) {
+        val steps = runCatching {
+            val arr = JSONObject(args).optJSONArray("steps")
+            val list = mutableListOf<String>()
+            if (arr != null) for (i in 0 until arr.length()) list.add(arr.optString(i).trim())
+            list
+        }.getOrDefault(emptyList()).filter { it.isNotBlank() }.take(5)
+        if (steps.isEmpty()) return
+        resetPlan()
+        planSteps.addAll(steps)
+        planDone.addAll(steps.map { false })
+        val content = planSteps.mapIndexed { i, st -> "⬜ ${i + 1}. $st" }.joinToString("\n")
+        val card = ChatMsg("plan", content)
+        val pos = asstIdx.coerceAtMost(messages.size)
+        messages.add(pos, card)
+        asstIdx = pos + 1
+        planMsgIdx = pos
+        adapter.notifyItemInserted(pos)
+        autoScrollBottom()
+    }
+
+    /** 引擎调用 plan_step 时勾选对应步骤 */
+    private fun markPlanStep(n: Int) {
+        if (planMsgIdx !in messages.indices || n < 1 || n > planSteps.size) return
+        if (planDone[n - 1]) return
+        planDone[n - 1] = true
+        messages[planMsgIdx].content = planSteps.mapIndexed { i, st ->
+            (if (planDone[i]) "✅" else "⬜") + " ${i + 1}. $st"
+        }.joinToString("\n")
+        adapter.notifyItemChanged(planMsgIdx)
+    }
+
+    /** 引擎调用 plan_done 时收尾 */
+    private fun finishPlan() {
+        if (planMsgIdx !in messages.indices) return
+        if (messages[planMsgIdx].content.contains("🏁")) return
+        messages[planMsgIdx].content += "\n🏁 完成"
+        adapter.notifyItemChanged(planMsgIdx)
+    }
+
     private fun scrollBottom() {
         recycler.post { recycler.smoothScrollToPosition(messages.size - 1) }
     }
@@ -1068,6 +1138,7 @@ class MainActivity : AppCompatActivity() {
 
     /** 智能滚动：仅在用户停留在底部附近时自动滚到底，向上翻看历史时不打扰 */
     private fun autoScrollBottom() {
+        if (userScrolling) return
         val lm = recycler.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
         val count = lm.itemCount
         if (count <= 0) return

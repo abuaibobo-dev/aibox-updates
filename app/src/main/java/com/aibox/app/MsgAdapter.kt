@@ -29,7 +29,7 @@ class MsgAdapter(
 
         /** 命中命令特征的消息默认折叠；正常回复（ai）永不折叠 */
         fun shouldCollapse(content: String, role: String): Boolean {
-            if (role == "ai") return false
+            if (role == "ai" || role == "plan") return false
             if (content.isBlank()) return false
             // 工具执行条目（🔧 开头）默认折叠
             if (role == "sys" && content.startsWith("🔧")) return true
@@ -85,6 +85,7 @@ class MsgAdapter(
     override fun getItemViewType(pos: Int): Int = when (items[pos].role) {
         "user" -> 0
         "ai" -> 1
+        "plan" -> 3
         else -> 2
     }
 
@@ -93,6 +94,7 @@ class MsgAdapter(
         return when (viewType) {
             0 -> VHUser(inflater.inflate(R.layout.item_msg_user, parent, false))
             1 -> VHAi(inflater.inflate(R.layout.item_msg_ai, parent, false))
+            3 -> VHPlan(inflater.inflate(R.layout.item_msg_plan, parent, false))
             else -> VHSys(inflater.inflate(R.layout.item_msg_sys, parent, false))
         }
     }
@@ -140,6 +142,14 @@ class MsgAdapter(
                 // 执行动画：⏳ 执行中消息呼吸脉动
                 if (m.content.startsWith("⏳")) startPulse(holder, holder.body)
             }
+            is VHPlan -> {
+                holder.body.text = m.content.ifEmpty { "…" }
+                holder.title.text = if (m.content.contains("🏁")) "🏁 任务完成" else "📋 任务计划"
+                holder.body.setTextColor(ContextCompat.getColor(
+                    holder.itemView.context,
+                    if (m.content.contains("🏁")) R.color.accent_amber else R.color.text_primary
+                ))
+            }
         }
     }
 
@@ -156,6 +166,11 @@ class MsgAdapter(
     class VHSys(v: View) : RecyclerView.ViewHolder(v) {
         val body: TextView = v.findViewById(R.id.tvBody)
         var pulse: android.animation.ValueAnimator? = null
+    }
+
+    class VHPlan(v: View) : RecyclerView.ViewHolder(v) {
+        val title: TextView = v.findViewById(R.id.tvPlanTitle)
+        val body: TextView = v.findViewById(R.id.tvBody)
     }
 }
 
