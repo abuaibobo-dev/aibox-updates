@@ -81,10 +81,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnModel: TextView
     private lateinit var btnSkill: TextView
     private val pendingAttachments = mutableListOf<File>()
-    /** 识图取字：选图 → ML Kit OCR → 文字进输入框 */
-    private val ocrPicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) runOcr(uri) else Toast.makeText(this, "未选择图片", Toast.LENGTH_SHORT).show()
-    }
+    /** 识图取字：选图 → ML Kit OCR → 文字进输入框（onCreate 里初始化，避免构造阶段注册失败） */
+    private var ocrPicker: androidx.activity.result.ActivityResultLauncher<androidx.activity.result.PickVisualMediaRequest>? = null
     private var currentSkill: String? = null
     // 流式回复 UI 节流：累积 delta，主线程合并刷新，避免每字符一次 notifyItemChanged 卡死
     private var pendingDelta = StringBuilder()
@@ -128,6 +126,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         CrashLog.install(applicationContext)
         AnrWatchdog.install(applicationContext)
+        ocrPicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri != null) runOcr(uri) else Toast.makeText(this, "未选择图片", Toast.LENGTH_SHORT).show()
+        }
         // 同步模型/证书是文件 IO，放到后台线程；且仅在引擎已就绪时做，
         // 避免与首次初始化的解压/写文件并发导致文件损坏
         if (CodexEngine.isInitialized(this)) {
@@ -183,6 +184,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         drawer = findViewById(R.id.drawerLayout)
+        applyStatusBarTheme()
         showCrashNoticeIfAny()
         // 侧栏头像：直接裁剪成圆形，避免覆盖/正方形露边
         runCatching {
@@ -233,7 +235,7 @@ class MainActivity : AppCompatActivity() {
         btnAttach.setOnClickListener { pickAttachment() }
         btnVoice.setOnClickListener { startVoiceInput() }
         btnOcr.setOnClickListener {
-            ocrPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            ocrPicker?.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
         btnModel.setOnClickListener { showModelPicker() }
         btnSkill.setOnClickListener { showSkillPicker() }
@@ -1076,6 +1078,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** 上次启动发生过崩溃时，进主页面弹一次提示，方便拿到堆栈而不是瞎猜 */
+    /** 状态栏图标深浅随主题（代码方式，兼容 API 24+，避免资源引用在部分机型上解析失败） */
+    private fun applyStatusBarTheme() {
+        try {
+            val night = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                window.insetsController?.setSystemBarsAppearance(
+                    if (night) 0 else android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                    android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = if (night) 0 else android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            }
+        } catch (_: Exception) { }
+    }
+
     private fun showCrashNoticeIfAny() {
         val prefs = getSharedPreferences("crash_notice", MODE_PRIVATE)
         val lastShown = prefs.getLong("last_shown", 0L)
@@ -1087,7 +1105,16 @@ class MainActivity : AppCompatActivity() {
         val stack = CrashLog.lastCrash(this) ?: return
         main.postDelayed({
             if (!isFinishing && !isDestroyed) {
-                Ui.info(this, "上次异常退出", "应用上次发生了一次崩溃，已记录。可到设置→导出诊断日志提交。\n\n$stack")
+                val d = android.app.AlertDialog.Builder(this)
+                    .setTitle("上次异常退出")
+                    .setMessage("应用上次崩溃了，已自动记录。请点“复制堆栈”把内容发给开发，修复更快。\n\n$stack")
+                    .setPositiveButton("复制堆栈") { _, _ ->
+                        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                            .setPrimaryClip(ClipData.newPlainText("crash", stack))
+                        Toast.makeText(this, "已复制崩溃堆栈，直接粘贴发给开发", Toast.LENGTH_LONG).show()
+                    }
+                    .setNegativeButton("知道了", null)
+                    .show()
             }
         }, 600)
     }
