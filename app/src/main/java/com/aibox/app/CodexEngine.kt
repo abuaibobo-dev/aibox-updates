@@ -851,6 +851,13 @@ object CodexEngine {
                 runCatching { android.system.Os.chmod(d.absolutePath, 0x1FF) }
             }
         } catch (_: Exception) {}
+        // Android 无 /etc/resolv.conf，musl 工具 DNS 会失败；写入可写副本供工具链使用
+        try {
+            val rc = File(p.prefix, "etc/resolv.conf")
+            rc.parentFile?.mkdirs()
+            rc.writeText("nameserver 223.5.5.5\nnameserver 119.29.29.29\nnameserver 8.8.8.8\n")
+            runCatching { android.system.Os.chmod(rc.absolutePath, 0x1A4) }
+        } catch (_: Exception) {}
         // termux-exec：通过 LD_PRELOAD + TERMUX__PREFIX 把 /data/data/com.termux/... 重定向到实际 prefix
         val termuxExec = File(p.lib, "libtermux-exec-ld-preload.so").takeIf { it.exists() }
             ?: File(p.lib, "libtermux-exec-direct-ld-preload.so").takeIf { it.exists() }

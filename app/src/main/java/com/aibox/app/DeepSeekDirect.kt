@@ -55,7 +55,7 @@ object DeepSeekDirect {
             .put("type", "function")
             .put("function", JSONObject()
                 .put("name", "exec_command")
-                .put("description", "在手机环境中执行一条 bash 命令并返回输出。支持联网下载、运行脚本、处理文件、查看目录等。")
+                .put("description", "在手机环境中执行一条 bash 命令并返回输出。注意：Python/wget 等工具 DNS 可能受限，需要联网获取内容或下载文件时优先使用 http_get / download_file 工具。")
                 .put("parameters", JSONObject()
                     .put("type", "object")
                     .put("properties", JSONObject()
@@ -87,6 +87,31 @@ object DeepSeekDirect {
                         .put("content", JSONObject().put("type", "string").put("description", "文件完整内容"))
                     )
                     .put("required", JSONArray().put("path").put("content"))
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "download_file")
+                .put("description", "由 App 直接联网下载文件到本地路径（绕开沙盒 DNS 限制）。可下载 pip wheel、静态编译工具、源码包、模型文件等任意 URL。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("url", JSONObject().put("type", "string").put("description", "完整下载地址，如 https://pypi.org/packages/.../xxx.whl"))
+                        .put("path", JSONObject().put("type", "string").put("description", "保存路径，绝对路径（如 /sdcard/...）或相对工作目录路径"))
+                    )
+                    .put("required", JSONArray().put("url").put("path"))
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "http_get")
+                .put("description", "由 App 直接请求一个 URL 并返回响应文本（绕开沙盒 DNS 限制）。适合获取 API 数据、HTML 页面、JSON、pip 索引页面等。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("url", JSONObject().put("type", "string").put("description", "完整 URL，如 https://pypi.org/pypi/requests/json"))
+                    )
+                    .put("required", JSONArray().put("url"))
                 )))
 
     /** 带工具循环的对话入口 */
@@ -298,6 +323,44 @@ object DeepSeekDirect {
                         "已写入 ${f.absolutePath}（${f.length()} 字节）"
                     }
                 }
+                "download_file" -> {
+                    val j = JSONObject(tc.arguments)
+                    val url = j.optString("url").trim()
+                    val f = resolvePath(ctx, j.optString("path"))
+                    if (url.isBlank()) "错误：url 不能为空"
+                    else if (f == null) "错误：路径为空"
+                    else {
+                        f.parentFile?.mkdirs()
+                        val req = Request.Builder().url(url)
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10)")
+                            .header("Accept", "*/*")
+                            .build()
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.code !in 200..299) {
+                                "下载失败（HTTP ${resp.code}）：${resp.body?.string().orEmpty().take(200)}"
+                            } else {
+                                val len = resp.body?.byteStream()?.use { input ->
+                                    f.outputStream().use { out -> input.copyTo(out) }
+                                } ?: -1L
+                                "已下载到 ${f.absolutePath}（$len 字节）"
+                            }
+                        }
+                    }
+                }
+                "http_get" -> {
+                    val j = JSONObject(tc.arguments)
+                    val url = j.optString("url").trim()
+                    if (url.isBlank()) "错误：url 不能为空"
+                    else {
+                        val req = Request.Builder().url(url)
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10)")
+                            .build()
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.code !in 200..299) "请求失败（HTTP ${resp.code}）：${resp.body?.string().orEmpty().take(200)}"
+                            else resp.body?.string().orEmpty().take(OUT_LIMIT)
+                        }
+                    }
+                }
                 "web_search" -> {
                     val j = JSONObject(tc.arguments)
                     webSearch(j.optString("query"))
@@ -403,8 +466,10 @@ object DeepSeekDirect {
             "你是一个简洁的助手。直接给答案，不要客套话，不要复述问题，不要多余的铺垫和总结。" +
             "除非用户明确要求详细解释，否则回复控制在 3~5 句以内；能用列表就用短列表。" +
             "环境说明：本机是手机沙盒（无 root），应用私有目录与外部存储（/sdcard）均可读写，网络可用（HTTPS）。" +
-            "apt/pkg 二进制路径被编译写死、无法安装系统包，但可以用 curl/wget 下载静态编译工具到工作目录或 ~/bin 直接解压使用，pip 可用 --user 或 --target 安装到可写目录。" +
-            "python3 / wget / sh / busybox 已预装可直接使用。文件读写支持绝对路径（/sdcard/...）或相对工作目录路径。同一个命令失败不要重复尝试超过 3 次，" +
+            "apt/pkg 二进制路径被编译写死、无法安装系统包。python3 / wget / sh / busybox 已预装可直接使用。" +
+            "重要：沙盒内 Python/wget 等工具因 Android 无 /etc/resolv.conf，DNS 解析会失败（gaierror）。需要联网时优先用 http_get / download_file 工具（由 App 直接联网）：" +
+            "装第三方库请用 download_file 下载 wheel（可先 http_get https://pypi.org/pypi/<包名>/json 查下载地址），再用 pip install --no-index --find-links=<目录> 或解压后加 PYTHONPATH 使用。" +
+            "文件读写支持绝对路径（/sdcard/...）或相对工作目录路径。同一个命令失败不要重复尝试超过 3 次，" +
             "连续失败时改用 read_file / write_file 排查，或直接告诉用户原因和替代方案。"))
         fun append(role: String, content: String) {
             if (content.isBlank()) return
