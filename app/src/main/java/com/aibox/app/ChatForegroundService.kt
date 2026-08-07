@@ -28,7 +28,7 @@ class ChatForegroundService : Service() {
         createChannel()
         val keepalive = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("keepalive", false)
         val n: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_chat)
+            .setSmallIcon(R.drawable.ic_stat_robot)
             .setContentTitle(if (keepalive) "Synaps 后台保活中" else "Synaps 正在回复…")
             .setContentText(if (keepalive) "通知常驻，可在设置中关闭" else "回复完成后通知自动消失")
             .setOngoing(true)

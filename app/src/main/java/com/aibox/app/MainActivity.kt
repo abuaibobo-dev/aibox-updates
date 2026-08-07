@@ -83,13 +83,6 @@ class MainActivity : AppCompatActivity() {
     private val main = Handler(Looper.getMainLooper())
     private val REQ_ATTACH = 1001
     private val REQ_VOICE = 1002
-    private val skills = listOf(
-        "通用对话" to "用自然、简洁的中文回答，像朋友一样交流，不要堆砌格式。",
-        "编程专家" to "以资深工程师身份回答，需要时给出可直接运行的代码并简要解释。",
-        "文档撰写" to "以正式中文撰写或润色文档，结构清晰、语言精炼。",
-        "翻译润色" to "在中文与英文之间准确翻译，并优化表达。"
-    )
-
     private var currentSessionId: String? = null
     private var currentThreadId: String? = null
     private var proc: Process? = null
@@ -475,7 +468,7 @@ class MainActivity : AppCompatActivity() {
             fullPrompt = "（对方引用了一条消息：\"${q.content.take(200)}\"，请针对这条引用回复）\n\n$fullPrompt"
         }
         currentSkill?.let { sk ->
-            skills.firstOrNull { it.first == sk }?.let { fullPrompt = "${it.second}\n\n$fullPrompt" }
+            CodexEngine.skillPrompt(this, sk)?.let { p2 -> fullPrompt = "$p2\n\n$fullPrompt" }
         }
         if (pendingAttachments.isNotEmpty()) {
             val paths = pendingAttachments.joinToString("\n") { " - $it" }
@@ -975,13 +968,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSkillPicker() {
-        val names = skills.map { it.first }.toList()
-        Ui.sheet(this, "选择技能", names) { which ->
-            currentSkill = skills[which].first
-            btnSkill.text = "技能：${skills[which].first}"
-            Toast.makeText(this, "技能：${skills[which].first}", Toast.LENGTH_SHORT).show()
+        val list = CodexEngine.loadSkills(this)
+        if (list.isEmpty()) {
+            Toast.makeText(this, "暂无技能", Toast.LENGTH_SHORT).show()
+            return
         }
-        Unit
+        val names = list.map { it.first }
+        val labels = list.map { (n, p) -> "$n——${p.take(30)}" }
+        Ui.sheet(this, "选择技能（引擎可实时更新）", labels) { which ->
+            currentSkill = names[which]
+            btnSkill.text = "技能：${names[which]}"
+            Toast.makeText(this, "技能：${names[which]}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     /** 顶栏 chip + 刷新按钮：显示账户余额（token 消耗改为余额） */

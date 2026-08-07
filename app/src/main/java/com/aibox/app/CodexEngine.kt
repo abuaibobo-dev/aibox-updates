@@ -169,6 +169,46 @@ object CodexEngine {
             .edit().putString("token", CryptoKey.encrypt(ctx, token.trim())).apply()
     }
 
+    // ---------- 技能（动态：引擎通过 manage_skills 实时增删改，UI 每次打开实时读取） ----------
+
+    fun skillsFile(ctx: Context): File = File(ctx.filesDir, "codex/skills.json")
+
+    fun loadSkills(ctx: Context): List<Pair<String, String>> {
+        val f = skillsFile(ctx)
+        if (f.exists()) {
+            try {
+                val arr = JSONArray(f.readText())
+                val list = mutableListOf<Pair<String, String>>()
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    val n = o.optString("name").trim()
+                    val p = o.optString("prompt").trim()
+                    if (n.isNotEmpty() && p.isNotEmpty()) list.add(n to p)
+                }
+                if (list.isNotEmpty()) return list
+            } catch (_: Exception) {}
+        }
+        val defaults = listOf(
+            "通用对话" to "用自然、简洁的中文回答，像朋友一样交流，不要堆砌格式。",
+            "编程专家" to "以资深工程师身份回答，需要时给出可直接运行的代码并简要解释。",
+            "文档撰写" to "以正式中文撰写或润色文档，结构清晰、语言精炼。",
+            "翻译润色" to "在中文与英文之间准确翻译，并优化表达。"
+        )
+        saveSkills(ctx, defaults)
+        return defaults
+    }
+
+    fun saveSkills(ctx: Context, list: List<Pair<String, String>>) {
+        val arr = JSONArray()
+        for ((n, p) in list) arr.put(JSONObject().put("name", n).put("prompt", p))
+        val f = skillsFile(ctx)
+        f.parentFile?.mkdirs()
+        f.writeText(arr.toString())
+    }
+
+    fun skillPrompt(ctx: Context, name: String): String? =
+        loadSkills(ctx).firstOrNull { it.first == name }?.second
+
     /** 每次启动用内置最新 models.json 覆盖旧文件，避免旧版（枚举值不合法）导致引擎配置 fallback */
     fun syncModels(ctx: Context) {
         val p = paths(ctx)

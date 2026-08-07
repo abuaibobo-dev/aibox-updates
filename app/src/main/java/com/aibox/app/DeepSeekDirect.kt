@@ -144,6 +144,33 @@ object DeepSeekDirect {
                 .put("description", "全部步骤完成后调用一次，宣告任务结束。")
                 .put("parameters", JSONObject().put("type", "object").put("properties", JSONObject()).put("required", JSONArray()))
                 ))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "submit_build")
+                .put("description", "把工作目录里写好的完整 Android 项目一键提交到云端编译成 APK（需用户已在 设置→GitHub Token 填过令牌）。App 会自动把整个项目推送到 GitHub 触发云端构建，构建完成后按约定直链下载 APK。只用于：生成/修改完整 Android 项目后要出安装包。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("project_dir", JSONObject().put("type", "string").put("description", "项目根目录：相对工作目录路径（如 myapp）或绝对路径"))
+                        .put("message", JSONObject().put("type", "string").put("description", "本次提交说明，一句话描述这个项目/改动"))
+                    )
+                    .put("required", JSONArray().put("project_dir"))
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "manage_skills")
+                .put("description", "管理 App 里的技能列表（实时同步到界面技能按钮，用户选中后会把它注入对话开头）。action=list 查看全部；action=add/set 新增或覆盖技能（需 name+prompt）；action=remove 删除技能。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("action", JSONObject().put("type", "string").put("description", "list / add / set / remove"))
+                        .put("name", JSONObject().put("type", "string").put("description", "技能名称，如 周报生成器"))
+                        .put("prompt", JSONObject().put("type", "string").put("description", "技能指令内容（add/set 时必填），用户选择该技能后会被注入到对话开头"))
+                    )
+                    .put("required", JSONArray().put("action"))
+                )))
 
     /** 带工具循环的对话入口 */
     fun chatWithTools(ctx: Context, history: List<Pair<String, String>>, prompt: String, key: String,
@@ -404,11 +431,101 @@ object DeepSeekDirect {
                     val j = JSONObject(tc.arguments)
                     webSearch(j.optString("query"))
                 }
+                "submit_build" -> {
+                    val j = JSONObject(tc.arguments)
+                    submitBuild(ctx, j.optString("project_dir"), j.optString("message"))
+                }
+                "manage_skills" -> {
+                    val j = JSONObject(tc.arguments)
+                    manageSkills(ctx, j.optString("action"), j.optString("name"), j.optString("prompt"))
+                }
                 else -> "错误：未知工具 ${tc.name}"
             }
         } catch (e: Exception) {
             "工具执行失败：${e.javaClass.simpleName} ${e.message ?: ""}"
         }
+    }
+
+    /** 技能管理：list/add/set/remove，实时写回 skills.json 供界面读取 */
+    private fun manageSkills(ctx: Context, action: String, name: String, prompt: String): String {
+        val list = CodexEngine.loadSkills(ctx).toMutableList()
+        return when (action.lowercase()) {
+            "list" -> if (list.isEmpty()) "当前没有技能"
+                else list.mapIndexed { i, (n, p) -> "${i + 1}. $n：${p.take(60)}" }.joinToString("\n")
+            "add", "set" -> {
+                if (name.isBlank() || prompt.isBlank()) "错误：add/set 需要 name 和 prompt"
+                else {
+                    list.removeAll { it.first == name }
+                    list.add(name to prompt)
+                    CodexEngine.saveSkills(ctx, list)
+                    "已${if (action.lowercase() == "add") "添加" else "更新"}技能「$name」（共 ${list.size} 个）"
+                }
+            }
+            "remove" -> {
+                if (list.removeAll { it.first == name }) {
+                    CodexEngine.saveSkills(ctx, list)
+                    "已移除技能「$name」（共 ${list.size} 个）"
+                } else "未找到技能「$name」"
+            }
+            else -> "错误：action 必须是 list/add/set/remove"
+        }
+    }
+
+    /** 一键提交云端编译：把完整 Android 项目推送到 GitHub agent-builds 仓库触发 CI，返回 APK 直链约定 */
+    private fun submitBuild(ctx: Context, projectDirRaw: String, message: String): String {
+        val token = CodexEngine.ghToken(ctx)
+        if (token.isBlank()) return "错误：请先在 设置 里填写并保存 GitHub Token（用于推送代码触发云端编译）"
+        val dir = resolvePath(ctx, projectDirRaw)
+        if (dir == null || !dir.isDirectory()) return "错误：项目目录不存在或不是文件夹：$projectDirRaw"
+        val skipDirs = setOf(".git", ".gradle", "build", ".idea", "__pycache__", ".kotlin")
+        val files = mutableListOf<File>()
+        dir.walkTopDown().forEach { f ->
+            if (f.isDirectory) {
+                if (f.name in skipDirs) return@forEach
+            } else if (f.length() <= 2 * 1024 * 1024) {
+                files.add(f)
+            }
+        }
+        files.sortBy { it.absolutePath }
+        if (files.isEmpty()) return "错误：项目目录里没有可提交的文件"
+        val repo = "abuaibobo-dev/agent-builds"
+        val branch = "agent-build-" + System.currentTimeMillis()
+        val defaultRef = ghApi(repo, "git/ref/heads/main", token, "GET")
+            ?: return "错误：无法读取云端仓库，请检查 GitHub Token 是否有 repo 写权限"
+        val sha = JSONObject(defaultRef).optJSONObject("object")?.optString("sha").orEmpty()
+        if (sha.isEmpty()) return "错误：无法读取云端仓库分支"
+        val refBody = JSONObject().put("ref", "refs/heads/$branch").put("sha", sha).toString()
+        ghApi(repo, "git/refs", token, "POST", refBody)
+        var pushed = 0
+        val commitMsg = message.ifBlank { "agent build" }
+        for (f in files) {
+            val rel = f.relativeTo(dir).path.replace('\\', '/')
+            val b64 = android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)
+            val body = JSONObject().put("message", commitMsg).put("content", b64).put("branch", branch).toString()
+            if (ghApi(repo, "contents/$rel", token, "PUT", body) != null) pushed++
+        }
+        if (pushed == 0) return "错误：文件推送失败，请检查 GitHub Token 是否有 repo 写权限"
+        return "已提交 $pushed 个文件到云端分支 $branch，云端构建已自动触发（约 3~6 分钟）。\n" +
+            "APK 直链：https://github.com/$repo/releases/download/$branch/app-debug.apk\n" +
+            "构建日志：https://github.com/$repo/actions\n" +
+            "可用 http_get 轮询 https://api.github.com/repos/$repo/releases/tags/$branch 判断是否完成（200=成功，404=构建中）。"
+    }
+
+    /** GitHub API 请求：成功返回响应体，失败返回 null */
+    private fun ghApi(repo: String, path: String, token: String, method: String, body: String? = null): String? {
+        val url = "https://api.github.com/repos/$repo/$path"
+        val b = Request.Builder().url(url)
+            .header("Authorization", "Bearer $token")
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Synaps-Android")
+        val req = when (method) {
+            "POST" -> b.post((body ?: "{}").toRequestBody(JSON))
+            "PUT" -> b.put((body ?: "{}").toRequestBody(JSON))
+            else -> b.get()
+        }.build()
+        return try {
+            client.newCall(req).execute().use { resp -> if (resp.code in 200..299) resp.body?.string() else null }
+        } catch (_: Exception) { null }
     }
 
     /** DuckDuckGo HTML 搜索：解析前 5 条结果的标题/链接/摘要 */
@@ -502,14 +619,16 @@ object DeepSeekDirect {
         val out = JSONArray()
         // 简洁回复约束：直给答案、不客套、不重复问题，除非用户要求详细
         out.put(JSONObject().put("role", "system").put("content",
-            "回复规则（必须遵守）：极简。默认 1~3 句，用户明确要求详细才展开。不客套、不复述问题、不要铺垫和总结式废话、不重复已说内容。能用列表就用短列表（不超过 3 项）。" +
+            "回复规则（必须遵守）：像 Codex 一样回复——先给结论，再给要点（每行一条，最多 3 条）。极简，默认 1~3 句，用户明确要求详细才展开。不客套、不复述问题、不要铺垫和总结式废话、不重复已说内容。" +
             "执行策略（必须遵守）：接到任务后一口气干到交付再停。允许连续批量执行多个工具/命令，不要在每步之间停下来总结、确认或纠结下一步；只有任务完成、遇到阻塞性错误（同一操作连续失败≥3次）、或缺少必须由用户提供的信息时才停下。整轮完成后只给 1 句 20 字以内的重点总结（结果+关键信息），不重复命令内容。" + "计划规则：多步任务开始执行前必须先调用 set_plan 声明 2~5 步计划（每步不超过15字），执行中每完成一步立即调用 plan_step 标记，全部完成调用 plan_done；文字回复里不要再重复计划内容，只需在最后给总结。单步任务不要调用这些工具。" +
             "不要主动附建议/补充/提示，除非用户明确要求或确有必要（各 1 句内）。" +
             "环境：手机沙盒（无 root）。python3/wget/sh/busybox 已装；已配本地代理+国内 pip 镜像，python/curl/pip 可在线联网装库；纯 Python 库全可用。" +
             "关键：引擎目录(\$PREFIX)与工作目录持久保存，装的东西重启后仍在；所有库/工具必须装到 \$PREFIX 或工作目录，不要用临时目录。" +
             "seccomp 说明：musl 静态编译的二进制与 C 库（含 numpy/scipy/pandas/jq/ripgrep/ffmpeg 的 musl 版）加载即被系统 seccomp 拦截（SIGSYS 31 被杀），App 无法放行，勿试。" +
             "破解路线：从 Termux 官方源 packages.termux.dev/apt/termux-main/pool/main/ 用 download_file 下载 bionic(Android 原生) 版 .deb 解压到 \$PREFIX/bionic/ 使用——bionic 动态二进制不受 seccomp 限制，numpy/pillow/jq/ffmpeg 都能跑；依赖（libc++/libopenblas/libjpeg 等）同样从该源下载。pip 装大库可直接在线装（已配清华镜像），也可 download_file 下 wheel。" +
-            "文件读写支持绝对路径（/sdcard 需用户在系统设置授权所有文件访问）或相对工作目录。命令失败不重复超 3 次，连续失败改用 read_file/write_file 排查或直接说明。"))
+            "文件读写支持绝对路径（/sdcard 需用户在系统设置授权所有文件访问）或相对工作目录。命令失败不重复超 3 次，连续失败改用 read_file/write_file 排查或直接说明。" +
+            "打包能力：完整 Android 项目写好后（必须含 settings.gradle、根 build.gradle、app/build.gradle、AndroidManifest.xml、res、源码，确保可独立编译），调用 submit_build 提交（project_dir 传项目根目录），App 自动推送云端编译；云端环境 JDK17 + Gradle8.9 + compileSdk 34。提交成功会返回分支名，APK 直链格式固定为 https://github.com/abuaibobo-dev/agent-builds/releases/download/<分支名>/app-debug.apk，云端构建约 3~6 分钟，可用 http_get 访问 https://api.github.com/repos/abuaibobo-dev/agent-builds/releases/tags/<分支名> 轮询是否完成（200=完成，404=还没好）。" +
+            "技能管理：用 manage_skills 查看/新增/更新/删除技能，技能会实时出现在 App 的技能按钮面板，用户选中后你的技能指令会被注入到该轮对话开头；可以主动把常用工作流注册成技能。"))
         fun append(role: String, content: String) {
             if (content.isBlank()) return
             val c = content.trim()
