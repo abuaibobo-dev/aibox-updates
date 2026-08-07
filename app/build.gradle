@@ -19,8 +19,21 @@ android {
         versionName "2.5.2"
     }
 
-    buildTypes {
+    signingConfigs {
         release {
+            storeFile rootProject.file('keystore/aibox-release.keystore')
+            storePassword 'Synaps2026Aibox!'
+            keyAlias 'synaps'
+            keyPassword 'Synaps2026Aibox!'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.release
+        }
+        release {
+            signingConfig signingConfigs.release
             minifyEnabled false
         }
     }
