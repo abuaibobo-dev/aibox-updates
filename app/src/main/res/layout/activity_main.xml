@@ -373,16 +373,6 @@
                         android:padding="8dp"/>
 
                     <ImageButton
-                        android:id="@+id/btnVoice"
-                        android:layout_width="38dp"
-                        android:layout_height="38dp"
-                        android:src="@drawable/ic_mic"
-                        android:tint="@color/icon_color"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="语音输入"
-                        android:padding="8dp"/>
-
-                    <ImageButton
                         android:id="@+id/btnOcr"
                         android:layout_width="38dp"
                         android:layout_height="38dp"
