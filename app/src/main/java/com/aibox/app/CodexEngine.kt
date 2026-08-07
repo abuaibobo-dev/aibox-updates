@@ -891,6 +891,10 @@ object CodexEngine {
             put("ALL_PROXY", proxyUrl)
             put("no_proxy", "127.0.0.1,localhost,::1")
             put("NO_PROXY", "127.0.0.1,localhost,::1")
+            // pip 走国内镜像提速（经本地代理转发，DNS 由 App 解析）
+            put("PIP_INDEX_URL", "https://pypi.tuna.tsinghua.edu.cn/simple")
+            put("PIP_TRUSTED_HOST", "pypi.tuna.tsinghua.edu.cn")
+            put("PIP_DISABLE_PIP_VERSION_CHECK", "1")
         }
     }
 

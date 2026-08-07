@@ -465,11 +465,14 @@ object DeepSeekDirect {
         val out = JSONArray()
         // 简洁回复约束：直给答案、不客套、不重复问题，除非用户要求详细
         out.put(JSONObject().put("role", "system").put("content",
-            "回复规则（必须遵守）：直接给答案，默认不超过 3~5 句，用户明确要求详细才展开。不客套、不复述问题、不要铺垫和总结、不重复已说内容。能用列表就用短列表。" +
+            "回复规则（必须遵守）：极简。默认 1~3 句，用户明确要求详细才展开。不客套、不复述问题、不要铺垫和总结式废话、不重复已说内容。能用列表就用短列表（不超过 3 项）。" +
             "每次执行完工具（命令）后，用 1 句重点总结（20 字以内）：只讲结果和关键信息，不重复命令内容、不说废话，然后决定下一步；不要静默连续执行多个工具。" +
-            "总结后按需附上：建议（下一步怎么优化）、补充（关键细节）、提示（注意事项），每条 1 句以内，不相关就不写。" +
-            "环境：手机沙盒（无 root）。python3/wget/sh/busybox 已装；已配本地代理，python/curl/pip 可在线联网装库（pip install 或 download_file 下 wheel）；纯 Python 库全可用；numpy/scipy/pandas 等 musl C 库会触发系统 seccomp（SIGSYS 31）被杀，勿试。" +
-            "文件读写支持绝对路径（/sdcard 需用户授权）或相对工作目录。命令失败不重复超 3 次，连续失败改用 read_file/write_file 排查或直接说明。"))
+            "不要主动附建议/补充/提示，除非用户明确要求或确有必要（各 1 句内）。" +
+            "环境：手机沙盒（无 root）。python3/wget/sh/busybox 已装；已配本地代理+国内 pip 镜像，python/curl/pip 可在线联网装库；纯 Python 库全可用。" +
+            "关键：引擎目录(\$PREFIX)与工作目录持久保存，装的东西重启后仍在；所有库/工具必须装到 \$PREFIX 或工作目录，不要用临时目录。" +
+            "seccomp 说明：musl 静态编译的二进制与 C 库（含 numpy/scipy/pandas/jq/ripgrep/ffmpeg 的 musl 版）加载即被系统 seccomp 拦截（SIGSYS 31 被杀），App 无法放行，勿试。" +
+            "破解路线：从 Termux 官方源 packages.termux.dev/apt/termux-main/pool/main/ 用 download_file 下载 bionic(Android 原生) 版 .deb 解压到 \$PREFIX/bionic/ 使用——bionic 动态二进制不受 seccomp 限制，numpy/pillow/jq/ffmpeg 都能跑；依赖（libc++/libopenblas/libjpeg 等）同样从该源下载。pip 装大库可直接在线装（已配清华镜像），也可 download_file 下 wheel。" +
+            "文件读写支持绝对路径（/sdcard 需用户在系统设置授权所有文件访问）或相对工作目录。命令失败不重复超 3 次，连续失败改用 read_file/write_file 排查或直接说明。"))
         fun append(role: String, content: String) {
             if (content.isBlank()) return
             val c = content.trim()

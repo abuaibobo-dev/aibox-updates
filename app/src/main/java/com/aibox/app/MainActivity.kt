@@ -101,6 +101,9 @@ class MainActivity : AppCompatActivity() {
     private var asstIdx = -1
     /** 最近一次余额查询结果（完整文本，点击 chip 展示） */
     private var lastBalanceFull = ""
+    /** 直连 DeepSeek 断流自动重试计数（每次真实发送重置） */
+    private var dsRetries = 0
+    private var dsRetrying = false
     /** 余额自动刷新定时器（60s） */
     private val balanceTicker = object : Runnable {
         override fun run() {
@@ -429,6 +432,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun send() {
+        if (!dsRetrying) dsRetries = 0
+        dsRetrying = false
         val text = etInput.text.toString().trim()
         if (text.isEmpty() || busy) return
         if (!CodexEngine.isInitialized(this)) {
@@ -443,6 +448,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        val preSend = ArrayList(messages)
         busy = true
         etInput.setText("")
         layWelcome.visibility = View.GONE
@@ -478,7 +484,7 @@ class MainActivity : AppCompatActivity() {
         val events = mutableListOf<Pair<String, String>>()
         // 超时策略：不是"总时长 30 秒"，而是"连续 120 秒没有任何输出"才结束。
         // DeepSeek 思考模型可能长时间无 content 分片（只有 reasoning），60 秒会误杀导致永远无回复。
-        val idleMs = 120000L
+        val idleMs = 180000L
         val noReply = Runnable {
             if (!busy) return@Runnable
             CodexEngine.stop(proc)
@@ -488,9 +494,9 @@ class MainActivity : AppCompatActivity() {
                 autoRetry = false
                 val tail = CodexEngine.runLog(this, 45)
                 val reason = if (tail.startsWith("（暂无")) {
-                    "引擎在 120 秒内没有任何输出（可能网络无法连接模型服务）。"
+                    "引擎在 180 秒内没有任何输出（可能网络无法连接模型服务）。"
                 } else {
-                    "引擎连续 120 秒无输出，已强制结束。最近日志：\n" + tail.take(1400)
+                    "引擎连续 180 秒无输出，已强制结束。最近日志：\n" + tail.take(1400)
                 }
                 messages[asstIdx].content = "⚠️ $reason"
                 adapter.notifyItemChanged(asstIdx)
@@ -584,6 +590,17 @@ class MainActivity : AppCompatActivity() {
                         ChatForegroundService.stop(this@MainActivity)
                         busy = false
                         updateSendBtn()
+                        if (dsRetries < 2 && isNetError(e)) {
+                            // 断流自动重试：恢复发送前快照，清掉中断痕迹，重新发送
+                            dsRetries++
+                            dsRetrying = true
+                            messages.clear()
+                            messages.addAll(preSend)
+                            adapter.notifyDataSetChanged()
+                            etInput.setText(lastUserText)
+                            send()
+                            return@post
+                        }
                         if (messages[asstIdx].content == AI_THINKING || messages[asstIdx].content.isBlank()) {
                             messages[asstIdx].content = "⚠️ $e"
                             adapter.notifyItemChanged(asstIdx)
@@ -1039,6 +1056,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun scrollBottom() {
         recycler.post { recycler.smoothScrollToPosition(messages.size - 1) }
+    }
+
+    /** 网络类错误判定：用于断流自动重试 */
+    private fun isNetError(msg: String): Boolean {
+        val low = msg.lowercase()
+        return low.contains("ioexception") || low.contains("sockettimeout") || low.contains("timeout") ||
+            low.contains("eof") || low.contains("connect") || low.contains("reset") ||
+            low.contains("http 5") || low.contains("unexpected") || low.contains("failed to connect")
     }
 
     /** 智能滚动：仅在用户停留在底部附近时自动滚到底，向上翻看历史时不打扰 */
