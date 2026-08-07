@@ -325,6 +325,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@null"
+                    android:gravity="top|start"
                     android:hint="输入消息…"
                     android:imeOptions="actionSend"
                     android:inputType="textMultiLine"

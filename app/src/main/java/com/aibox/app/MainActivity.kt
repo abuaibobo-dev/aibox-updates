@@ -101,6 +101,13 @@ class MainActivity : AppCompatActivity() {
     private var asstIdx = -1
     /** 最近一次余额查询结果（完整文本，点击 chip 展示） */
     private var lastBalanceFull = ""
+    /** 余额自动刷新定时器（60s） */
+    private val balanceTicker = object : Runnable {
+        override fun run() {
+            refreshBalance()
+            main.postDelayed(this, 60000L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(getSharedPreferences("theme", MODE_PRIVATE).getInt("mode", AppCompatDelegate.MODE_NIGHT_NO))
@@ -291,6 +298,9 @@ class MainActivity : AppCompatActivity() {
         refreshEngineState()
         refreshSessions()
         refreshBalance()
+        // 余额自动刷新：60s 一次，进页面运行、退页面停止
+        main.removeCallbacks(balanceTicker)
+        main.postDelayed(balanceTicker, 60000L)
         if (!CodexEngine.isInitialized(this)) {
             openingEngine = false
             startEngine()
@@ -525,7 +535,7 @@ class MainActivity : AppCompatActivity() {
                             sb.append(chunk)
                             messages[asstIdx].content = sb.toString()
                             adapter.notifyItemChanged(asstIdx)
-                            recycler.scrollToPosition(messages.size - 1)
+                            autoScrollBottom()
                         }
                     }
                 },
@@ -615,7 +625,7 @@ class MainActivity : AppCompatActivity() {
                                 events.add("text" to chunk)
                                 messages[asstIdx].content = sb.toString()
                                 adapter.notifyItemChanged(asstIdx)
-                                recycler.scrollToPosition(messages.size - 1)
+                                autoScrollBottom()
                             }
                         }
                     }
@@ -976,7 +986,7 @@ class MainActivity : AppCompatActivity() {
             asstIdx++
             adapter.notifyItemInserted(ai)
         }
-        scrollBottom()
+        autoScrollBottom()
     }
 
     /** 工具执行完成：把最后一条 ⏳ 执行中消息替换为结果；没有则追加 */
@@ -988,7 +998,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             appendToolMsg(line)
         }
-        scrollBottom()
+        autoScrollBottom()
     }
 
     /** 上次启动发生过崩溃时，进主页面弹一次提示，方便拿到堆栈而不是瞎猜 */
@@ -1008,8 +1018,14 @@ class MainActivity : AppCompatActivity() {
         }, 600)
     }
 
+    override fun onPause() {
+        super.onPause()
+        main.removeCallbacks(balanceTicker)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        main.removeCallbacks(balanceTicker)
         try { tts?.stop(); tts?.shutdown() } catch (_: Exception) {}
     }
 
@@ -1023,6 +1039,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun scrollBottom() {
         recycler.post { recycler.smoothScrollToPosition(messages.size - 1) }
+    }
+
+    /** 智能滚动：仅在用户停留在底部附近时自动滚到底，向上翻看历史时不打扰 */
+    private fun autoScrollBottom() {
+        val lm = recycler.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
+        val count = lm.itemCount
+        if (count <= 0) return
+        if (lm.findLastVisibleItemPosition() >= count - 3) {
+            recycler.scrollToPosition(count - 1)
+        }
     }
 
     private fun updateSendBtn() {
