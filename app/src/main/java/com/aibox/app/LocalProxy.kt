@@ -87,14 +87,18 @@ object LocalProxy {
             c.close(); return
         }
         try { c.getOutputStream().write("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray()) } catch (_: Exception) { up.close(); c.close(); return }
-        pump(c.getInputStream(), up.getOutputStream(), c, up)
-        pump(up.getInputStream(), c.getOutputStream(), c, up)
+        // 关键：泵线程必须阻塞等待，任一方向 EOF 时泵线程会关闭两端 socket。
+        // 若提前关闭 socket，客户端 TLS 握手会立即 EOF（SSLEOFError）。
+        val t1 = pump(c.getInputStream(), up.getOutputStream(), c, up)
+        val t2 = pump(up.getInputStream(), c.getOutputStream(), c, up)
+        try { t1.join() } catch (_: InterruptedException) {}
+        try { t2.join() } catch (_: InterruptedException) {}
         try { up.close() } catch (_: Exception) {}
         try { c.close() } catch (_: Exception) {}
     }
 
-    private fun pump(src: InputStream, dst: OutputStream, a: Socket, b: Socket) {
-        Thread {
+    private fun pump(src: InputStream, dst: OutputStream, a: Socket, b: Socket): Thread {
+        val t = Thread {
             try {
                 val buf = ByteArray(16384)
                 while (true) {
@@ -106,7 +110,10 @@ object LocalProxy {
             } catch (_: Exception) {}
             try { b.close() } catch (_: Exception) {}
             try { a.close() } catch (_: Exception) {}
-        }.apply { isDaemon = true; start() }
+        }
+        t.isDaemon = true
+        t.start()
+        return t
     }
 
     /** 普通 HTTP 转发：用 HttpURLConnection（App 进程 bionic，DNS 走 netd） */
