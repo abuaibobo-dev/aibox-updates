@@ -882,6 +882,15 @@ object CodexEngine {
             put("DEPLOY_REPO", deployRepo)
             // git 推送免密：用 token 做 basic auth
             put("GIT_ASKPASS", p.bin.absolutePath + "/git-askpass.sh")
+            // 本地 HTTP/HTTPS 代理：DNS 由 App 进程解析（系统 netd），绕开沙盒 musl 工具 DNS 限制
+            val proxyUrl = "http://127.0.0.1:${LocalProxy.start()}"
+            put("http_proxy", proxyUrl)
+            put("https_proxy", proxyUrl)
+            put("HTTP_PROXY", proxyUrl)
+            put("HTTPS_PROXY", proxyUrl)
+            put("ALL_PROXY", proxyUrl)
+            put("no_proxy", "127.0.0.1,localhost,::1")
+            put("NO_PROXY", "127.0.0.1,localhost,::1")
         }
     }
 

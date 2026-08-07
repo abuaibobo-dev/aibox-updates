@@ -15,6 +15,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import java.util.Locale
 import androidx.core.app.NotificationCompat
@@ -123,6 +124,22 @@ class MainActivity : AppCompatActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 9002)
+        }
+        // 首次启动引导"所有文件访问"（写 /sdcard 需系统级授权）
+        if (!sPrefs.getBoolean("asked_files", false)) {
+            sPrefs.edit().putBoolean("asked_files", true).apply()
+            if (!CodexEngine.hasAllFilesAccess(this)) {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("开启全部文件访问")
+                    .setMessage("读写 /sdcard 需要系统级“所有文件访问”授权（设置→特殊权限→所有文件访问）。不开启也能正常聊天，仅无法读写外部存储。")
+                    .setPositiveButton("去授权") { _, _ ->
+                        try {
+                            startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
+                        } catch (_: Exception) {}
+                    }
+                    .setNegativeButton("稍后", null)
+                    .show()
+            }
         }
         // 开启过"后台保活"则常驻前台服务，切后台不中断
         if (sPrefs.getBoolean("keepalive", false)) {

@@ -468,8 +468,8 @@ object DeepSeekDirect {
             "环境说明：本机是手机沙盒（无 root），应用私有目录与外部存储（/sdcard）均可读写，网络可用（HTTPS）。" +
             "apt/pkg 二进制路径被编译写死、无法安装系统包。python3 / wget / sh / busybox 已预装可直接使用。" +
             "环境已移除坏 LD_PRELOAD，pip 可直接使用：装库优先 pip install --no-index --find-links=<wheel目录>，或下载 wheel 解压后加 PYTHONPATH。" +
-            "重要：沙盒内 musl 版 python/wget 的 DNS 解析失败（Android 无 /etc/resolv.conf + 系统 seccomp 限制，App 无法放行），需要联网时优先用 http_get / download_file / web_search 工具（由 App 直接联网）：" +
-            "装第三方库请用 download_file 下载 wheel（可先 http_get https://pypi.org/pypi/<包名>/json 查下载地址），再用 pip install --no-index --find-links=<目录> 或解压后加 PYTHONPATH 使用。" +
+            "联网：环境已注入本地代理（http_proxy/https_proxy 指向 App 内置代理 127.0.0.1，DNS 由 App 进程解析），python/curl/wget/pip 可直接联网，无需绕行。" +
+            "装第三方库可直接 pip 在线安装（可加 -i https://pypi.org/simple），或用 download_file 下载 wheel 后 pip install --no-index --find-links=<目录> 使用。" +
             "numpy/scipy/pandas 等 musl C 科学库会触发 seccomp 拦截（SIGSYS 31）被杀，不要反复尝试；纯 Python 库（requests/bs4/jinja2 等）全部可用。" +
             "若要 python 直连网络或跑科学计算：用 download_file 从 Termux 官方源 packages.termux.dev/apt/termux-main/pool/main/ 下载 bionic(Android 原生) 版 python 及依赖 .deb 解压到可写目录并设 LD_LIBRARY_PATH，bionic 版无 DNS/seccomp 限制。" +
             "HTTPS 证书已内置（119 个根证书）无需额外处理。写 /sdcard 需用户在系统设置→特殊权限→所有文件访问 中授权，未授权时 /sdcard 只读。" +
