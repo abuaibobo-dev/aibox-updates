@@ -943,15 +943,15 @@ object CodexEngine {
     private fun parse(line: String): EngineEvent? {
         return try {
             val j = JSONObject(line)
-            when (j.optString("type")) {
-                "thread.started" -> EngineEvent("thread", threadId = j.optString("thread_id").ifEmpty { null })
-                "item.completed" -> {
-                    val item = j.optJSONObject("item") ?: return null
             // 安全取值：JSON null / 缺失 → 空串，避免 org.json optString 把 null 渲染成 "null" 文本
             fun txt(o: JSONObject, k: String): String {
                 val v = o.opt(k)
                 return if (v == null || v == JSONObject.NULL) "" else o.optString(k).trim()
             }
+            when (j.optString("type")) {
+                "thread.started" -> EngineEvent("thread", threadId = j.optString("thread_id").ifEmpty { null })
+                "item.completed" -> {
+                    val item = j.optJSONObject("item") ?: return null
                     when (item.optString("type")) {
                         "agent_message" -> EngineEvent("text", txt(item, "text"))
                         "agent_reasoning" -> EngineEvent("reasoning", txt(item, "text"))
