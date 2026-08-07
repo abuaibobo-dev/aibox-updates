@@ -25,9 +25,9 @@ object DeepSeekDirect {
 
     private const val API = "https://api.deepseek.com/chat/completions"
     private const val MODEL = "deepseek-chat"
-    private const val MAX_ROUNDS = 16
-    private const val TOOL_TIMEOUT_SEC = 30L
-    private const val OUT_LIMIT = 8000
+    private const val MAX_ROUNDS = 32
+    private const val TOOL_TIMEOUT_SEC = 300L
+    private const val OUT_LIMIT = 16000
     private val JSON = "application/json; charset=utf-8".toMediaType()
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -55,7 +55,7 @@ object DeepSeekDirect {
             .put("type", "function")
             .put("function", JSONObject()
                 .put("name", "exec_command")
-                .put("description", "在手机的沙盒工作目录里执行一条 bash 命令并返回输出。可用于运行脚本、处理文件、查看目录等。")
+                .put("description", "在手机环境中执行一条 bash 命令并返回输出。支持联网下载、运行脚本、处理文件、查看目录等。")
                 .put("parameters", JSONObject()
                     .put("type", "object")
                     .put("properties", JSONObject()
@@ -67,11 +67,11 @@ object DeepSeekDirect {
             .put("type", "function")
             .put("function", JSONObject()
                 .put("name", "read_file")
-                .put("description", "读取工作目录中的文本文件内容。")
+                .put("description", "读取文本文件内容。支持绝对路径（如 /sdcard/...）或相对工作目录的路径。")
                 .put("parameters", JSONObject()
                     .put("type", "object")
                     .put("properties", JSONObject()
-                        .put("path", JSONObject().put("type", "string").put("description", "相对工作目录的文件路径，例如 notes/a.txt"))
+                        .put("path", JSONObject().put("type", "string").put("description", "文件路径，绝对路径（如 /sdcard/notes/a.txt）或相对工作目录路径"))
                     )
                     .put("required", JSONArray().put("path"))
                 )))
@@ -79,11 +79,11 @@ object DeepSeekDirect {
             .put("type", "function")
             .put("function", JSONObject()
                 .put("name", "write_file")
-                .put("description", "在工作目录中写入/覆盖一个文本文件。")
+                .put("description", "写入/覆盖一个文本文件。支持绝对路径（如 /sdcard/...）或相对工作目录的路径。")
                 .put("parameters", JSONObject()
                     .put("type", "object")
                     .put("properties", JSONObject()
-                        .put("path", JSONObject().put("type", "string").put("description", "相对工作目录的文件路径，例如 notes/a.txt"))
+                        .put("path", JSONObject().put("type", "string").put("description", "文件路径，绝对路径（如 /sdcard/notes/a.txt）或相对工作目录路径"))
                         .put("content", JSONObject().put("type", "string").put("description", "文件完整内容"))
                     )
                     .put("required", JSONArray().put("path").put("content"))
@@ -283,15 +283,15 @@ object DeepSeekDirect {
                 }
                 "read_file" -> {
                     val j = JSONObject(tc.arguments)
-                    val f = resolveInWorkDir(ctx, j.optString("path"))
-                    if (f == null) "错误：路径超出工作目录，仅允许访问 work 目录内文件"
+                    val f = resolvePath(ctx, j.optString("path"))
+                    if (f == null) "错误：路径为空"
                     else if (!f.exists()) "错误：文件不存在 ${f.absolutePath}"
                     else f.readText().take(OUT_LIMIT)
                 }
                 "write_file" -> {
                     val j = JSONObject(tc.arguments)
-                    val f = resolveInWorkDir(ctx, j.optString("path"))
-                    if (f == null) "错误：路径超出工作目录，仅允许访问 work 目录内文件"
+                    val f = resolvePath(ctx, j.optString("path"))
+                    if (f == null) "错误：路径为空"
                     else {
                         f.parentFile?.mkdirs()
                         f.writeText(j.optString("content"))
@@ -350,10 +350,12 @@ object DeepSeekDirect {
         return try { java.net.URLDecoder.decode(u, "UTF-8") } catch (_: Exception) { u }
     }
 
-    private fun resolveInWorkDir(ctx: Context, raw: String): File? {
+    /** 放开路径限制：绝对路径直接用（App 可访问的外部存储等），相对路径基于工作目录 */
+    private fun resolvePath(ctx: Context, raw: String): File? {
+        if (raw.isBlank()) return null
         val work = workDir(ctx).absoluteFile
-        val f = File(work, raw.trimStart('/')).absoluteFile
-        return if (f.absolutePath.startsWith(work.absolutePath + File.separator) || f.absolutePath == work.absolutePath) f else null
+        val f = if (raw.startsWith("/")) File(raw) else File(work, raw.trimStart('/'))
+        return f.absoluteFile
     }
 
     private fun runShell(ctx: Context, cmd: String): String {
@@ -361,15 +363,8 @@ object DeepSeekDirect {
         val bash = File(p.bin, "bash")
         if (!bash.exists()) return "错误：运行环境未安装（bash 不存在），请先初始化引擎"
         val pb = ProcessBuilder(bash.absolutePath, "-c", cmd)
-        val basePath = System.getenv("PATH") ?: "/system/bin:/system/xbin"
-        pb.environment().apply {
-            put("HOME", p.home.absolutePath)
-            put("PREFIX", p.prefix.absolutePath)
-            put("PATH", "${p.bin.absolutePath}:$basePath")
-            put("LD_LIBRARY_PATH", p.lib.absolutePath)
-            put("TMPDIR", p.tmp.absolutePath)
-            put("TERM", "xterm-256color")
-        }
+        // 完整继承引擎环境：termux-exec 路径重定向、CA 证书、GitHub token、可写 TMPDIR 等
+        pb.environment().putAll(CodexEngine.env(ctx, p))
         pb.directory(workDir(ctx))
         pb.redirectErrorStream(true)
         return try {
@@ -407,8 +402,9 @@ object DeepSeekDirect {
         out.put(JSONObject().put("role", "system").put("content",
             "你是一个简洁的助手。直接给答案，不要客套话，不要复述问题，不要多余的铺垫和总结。" +
             "除非用户明确要求详细解释，否则回复控制在 3~5 句以内；能用列表就用短列表。" +
-            "环境说明：本机是手机沙盒，apt/pkg 的安装路径被写死且不可写，无法安装任何软件包，不要反复尝试安装。" +
-            "python3 / wget / sh / busybox 已预装可直接使用。同一个命令失败不要重复尝试超过 2 次，" +
+            "环境说明：本机是手机沙盒（无 root），应用私有目录与外部存储（/sdcard）均可读写，网络可用（HTTPS）。" +
+            "apt/pkg 二进制路径被编译写死、无法安装系统包，但可以用 curl/wget 下载静态编译工具到工作目录或 ~/bin 直接解压使用，pip 可用 --user 或 --target 安装到可写目录。" +
+            "python3 / wget / sh / busybox 已预装可直接使用。文件读写支持绝对路径（/sdcard/...）或相对工作目录路径。同一个命令失败不要重复尝试超过 3 次，" +
             "连续失败时改用 read_file / write_file 排查，或直接告诉用户原因和替代方案。"))
         fun append(role: String, content: String) {
             if (content.isBlank()) return

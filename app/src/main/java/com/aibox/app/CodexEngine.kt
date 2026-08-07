@@ -838,14 +838,19 @@ object CodexEngine {
 
     // ---------------- 内部实现 ----------------
 
-    private fun env(ctx: Context, p: Paths): Map<String, String> {
+    internal fun env(ctx: Context, p: Paths): Map<String, String> {
         val suPaths = listOf("/system/bin", "/system/xbin", "/sbin", "/su/bin", "/vendor/bin", "/system/sbin")
         val base = System.getenv("PATH") ?: suPaths.joinToString(":")
         val ca = File(p.prefix, "etc/ssl/certs/ca-certificates.crt").absolutePath
         val gh = ghToken(ctx)
         val deployRepo = "abuaibobo-dev/aibox-updates"
-        // 可写临时目录：/tmp 在 Android 不可写，统一用引擎 tmp（不存在则创建）
-        try { p.tmp.mkdirs(); android.system.Os.chmod(p.tmp.absolutePath, 0x1FF) } catch (_: Exception) {}
+        // 放开所有引擎目录写权限：prefix/home/work/cache/tmp 统一可写，/tmp 在 Android 不可写，用引擎 tmp
+        try {
+            listOf(p.prefix, p.home, p.codexHome, p.work, p.cache, p.tmp).forEach { d ->
+                d.mkdirs()
+                runCatching { android.system.Os.chmod(d.absolutePath, 0x1FF) }
+            }
+        } catch (_: Exception) {}
         // termux-exec：通过 LD_PRELOAD + TERMUX__PREFIX 把 /data/data/com.termux/... 重定向到实际 prefix
         val termuxExec = File(p.lib, "libtermux-exec-ld-preload.so").takeIf { it.exists() }
             ?: File(p.lib, "libtermux-exec-direct-ld-preload.so").takeIf { it.exists() }
