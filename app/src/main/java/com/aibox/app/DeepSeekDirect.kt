@@ -468,10 +468,11 @@ object DeepSeekDirect {
             "环境说明：本机是手机沙盒（无 root），应用私有目录与外部存储（/sdcard）均可读写，网络可用（HTTPS）。" +
             "apt/pkg 二进制路径被编译写死、无法安装系统包。python3 / wget / sh / busybox 已预装可直接使用。" +
             "环境已移除坏 LD_PRELOAD，pip 可直接使用：装库优先 pip install --no-index --find-links=<wheel目录>，或下载 wheel 解压后加 PYTHONPATH。" +
-            "重要：沙盒内 Python/wget 等工具因 Android 无 /etc/resolv.conf，DNS 解析会失败（gaierror）。需要联网时优先用 http_get / download_file 工具（由 App 直接联网）：" +
+            "重要：沙盒内 musl 版 python/wget 的 DNS 解析失败（Android 无 /etc/resolv.conf + 系统 seccomp 限制，App 无法放行），需要联网时优先用 http_get / download_file / web_search 工具（由 App 直接联网）：" +
             "装第三方库请用 download_file 下载 wheel（可先 http_get https://pypi.org/pypi/<包名>/json 查下载地址），再用 pip install --no-index --find-links=<目录> 或解压后加 PYTHONPATH 使用。" +
-            "注意：numpy/scipy/pandas 等 musl 编译的 C 科学库加载时会触发 Android 系统 seccomp 拦截（SIGSYS 信号 31 被杀），这是系统级限制、App 无法放行，不要反复安装尝试。" +
-            "需要科学计算时用纯 Python 方案（array/statistics/decimal/fractions），或经 download_file 安装 Termux 的 bionic(Android 原生) 版 python+numpy 环境后使用。" +
+            "numpy/scipy/pandas 等 musl C 科学库会触发 seccomp 拦截（SIGSYS 31）被杀，不要反复尝试；纯 Python 库（requests/bs4/jinja2 等）全部可用。" +
+            "若要 python 直连网络或跑科学计算：用 download_file 从 Termux 官方源 packages.termux.dev/apt/termux-main/pool/main/ 下载 bionic(Android 原生) 版 python 及依赖 .deb 解压到可写目录并设 LD_LIBRARY_PATH，bionic 版无 DNS/seccomp 限制。" +
+            "HTTPS 证书已内置（119 个根证书）无需额外处理。写 /sdcard 需用户在系统设置→特殊权限→所有文件访问 中授权，未授权时 /sdcard 只读。" +
             "文件读写支持绝对路径（/sdcard/...）或相对工作目录路径。同一个命令失败不要重复尝试超过 3 次，" +
             "连续失败时改用 read_file / write_file 排查，或直接告诉用户原因和替代方案。"))
         fun append(role: String, content: String) {
