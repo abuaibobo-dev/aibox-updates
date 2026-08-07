@@ -8,7 +8,6 @@ import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.pm.PackageManager
-import android.speech.RecognizerIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -78,7 +77,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolScroll: HorizontalScrollView
     private lateinit var toolBar: LinearLayout
     private lateinit var btnAttach: ImageButton
-    private lateinit var btnVoice: ImageButton
     private lateinit var btnOcr: ImageButton
     private lateinit var btnModel: TextView
     private lateinit var btnSkill: TextView
@@ -95,7 +93,6 @@ class MainActivity : AppCompatActivity() {
     private var tts: TextToSpeech? = null
     private val main = Handler(Looper.getMainLooper())
     private val REQ_ATTACH = 1001
-    private val REQ_VOICE = 1002
     private var currentSessionId: String? = null
     private var currentThreadId: String? = null
     private var proc: Process? = null
@@ -233,13 +230,11 @@ class MainActivity : AppCompatActivity() {
             findViewById<View>(R.id.quoteBar).visibility = View.GONE
         }
         btnAttach = findViewById(R.id.btnAttach)
-        btnVoice = findViewById(R.id.btnVoice)
         btnOcr = findViewById(R.id.btnOcr)
         btnModel = findViewById(R.id.btnModel)
         btnSkill = findViewById(R.id.btnSkill)
 
         btnAttach.setOnClickListener { pickAttachment() }
-        btnVoice.setOnClickListener { startVoiceInput() }
         btnOcr.setOnClickListener {
             ocrPicker?.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
@@ -884,30 +879,9 @@ class MainActivity : AppCompatActivity() {
         nm.notify(1001, n)
     }
 
-    private fun startVoiceInput() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQ_VOICE)
-            return
-        }
-        try {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
-                putExtra(RecognizerIntent.EXTRA_PROMPT, "说话中…")
-            }
-            startActivityForResult(intent, REQ_VOICE)
-        } catch (e: Exception) {
-            Toast.makeText(this, "此设备不支持语音输入", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_VOICE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            startVoiceInput()
-        } else if (requestCode == REQ_VOICE) {
-            Toast.makeText(this, "需要麦克风权限才能语音输入", Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun pickAttachment() {
@@ -922,14 +896,6 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_ATTACH && resultCode == RESULT_OK) {
             data?.data?.let { saveAttachment(it) }
-        }
-        if (requestCode == REQ_VOICE && resultCode == RESULT_OK) {
-            val words = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty()
-            if (words.isNotEmpty()) {
-                val cur = etInput.text.toString()
-                etInput.setText(if (cur.isBlank()) words[0] else "$cur${words[0]}")
-                etInput.setSelection(etInput.text.length)
-            }
         }
     }
 
@@ -996,6 +962,7 @@ class MainActivity : AppCompatActivity() {
             CodexEngine.PROVIDER_DEEPSEEK -> "DeepSeek ▾"
             CodexEngine.PROVIDER_GROQ -> "Groq ▾"
             CodexEngine.PROVIDER_AGNES -> "Agnes ▾"
+            CodexEngine.PROVIDER_LOCAL -> "本地·千问3 ▾"
             else -> "GPT-4o ▾"
         }
     }

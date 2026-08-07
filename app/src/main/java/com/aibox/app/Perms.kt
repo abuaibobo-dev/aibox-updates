@@ -19,7 +19,6 @@ object Perms {
         add(Manifest.permission.READ_PHONE_STATE)
         add(Manifest.permission.READ_SMS)
         add(Manifest.permission.CAMERA)
-        add(Manifest.permission.RECORD_AUDIO)
         add(Manifest.permission.POST_NOTIFICATIONS)
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
             add(Manifest.permission.READ_EXTERNAL_STORAGE)

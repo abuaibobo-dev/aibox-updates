@@ -29,12 +29,13 @@ data class EngineEvent(val kind: String, val text: String = "", val threadId: St
 
 object CodexEngine {
 
-    const val VERSION = "0.146.0"
+    const val VERSION = "0.147.0"
     const val PROVIDER_DEEPSEEK = "deepseek"
     const val PROVIDER_OPENROUTER = "openrouter"
     const val PROVIDER_GROQ = "groq"
     const val PROVIDER_AGNES = "agnes"
     const val PROVIDER_OPENAI = "openai"
+    const val PROVIDER_LOCAL = "local" // 本地模型（LiteRT/Qwen3 占位，推理后端后续补齐）
 
     /** 实测确认 /responses 严格校验、拒绝 custom 工具（apply_patch）的供应商。
      *  DeepSeek 走本地转接头（DeepSeekAdapter），custom 工具必被剥离，故引擎侧一并关闭，
@@ -46,7 +47,8 @@ object CodexEngine {
         PROVIDER_OPENROUTER to "OpenRouter（GPT-4o-mini）",
         PROVIDER_DEEPSEEK to "DeepSeek（本地转接头）",
         PROVIDER_AGNES to "Agnes（聚合 · 已实测可用）",
-        PROVIDER_GROQ to "Groq（实验性）"
+        PROVIDER_GROQ to "Groq（实验性）",
+        PROVIDER_LOCAL to "本地·千问3（离线）"
     )
     private const val URL_BOOTSTRAP = "https://github.com/abuaibobo-dev/aibox-updates/releases/download/v2.0.1/bootstrap-aarch64.zip"
     private const val URL_TOOLS = "https://github.com/abuaibobo-dev/aibox-updates/releases/download/tools-v1/aibox-static-tools-aarch64.tar.gz"
@@ -112,6 +114,7 @@ object CodexEngine {
         PROVIDER_GROQ -> "gsk_key"
         PROVIDER_AGNES -> "agnes_key"
         PROVIDER_OPENAI -> "openai_key"
+        PROVIDER_LOCAL -> "local_key"
         else -> "or_key"
     }
 
@@ -120,6 +123,7 @@ object CodexEngine {
         PROVIDER_GROQ -> "llama-3.3-70b-versatile"
         PROVIDER_AGNES -> "agnes-2.5-flash"
         PROVIDER_OPENAI -> "gpt-5"
+        PROVIDER_LOCAL -> "qwen3-1.7b"
         else -> "openai/gpt-4o-mini"
     }
 
@@ -128,6 +132,7 @@ object CodexEngine {
         PROVIDER_GROQ -> "https://api.groq.com/openai/v1"
         PROVIDER_AGNES -> "https://apihub.agnes-ai.cn/v1"
         PROVIDER_OPENAI -> "https://api.openai.com/v1"
+        PROVIDER_LOCAL -> "http://127.0.0.1:11434/v1"
         else -> "https://openrouter.ai/api/v1"
     }
 
@@ -254,6 +259,7 @@ object CodexEngine {
 
     /** 用已保存的 key 验证连接；DeepSeek 发真实 ping（chat/completions），返回状态码与错误原文 */
     fun testConnection(ctx: Context, key: String): String {
+        if (provider(ctx) == PROVIDER_LOCAL) return "本地·千问3 模型已接入（占位）。推理后端上线后即可离线对话"
         if (provider(ctx) == PROVIDER_DEEPSEEK) return testDeepSeekPing(key)
         val url = when (provider(ctx)) {
             PROVIDER_GROQ -> "https://api.groq.com/openai/v1/models"

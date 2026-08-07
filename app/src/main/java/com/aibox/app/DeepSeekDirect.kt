@@ -33,7 +33,7 @@ object DeepSeekDirect {
 
     private const val API = "https://api.deepseek.com/chat/completions"
     private const val MODEL = "deepseek-chat"
-    private const val MAX_ROUNDS = 60
+    private const val MAX_ROUNDS = 100
     private const val TOOL_TIMEOUT_SEC = 300L
     /** 任务/动作型请求：命中则第一轮就必须真调工具，纯文字回答直接作废重试 */
     private val ACTION_RE = Regex("帮我|写一|写个|写|创建|生成|修改|编译|下载|安装|删除|转换|整理|执行|运行|列出|读取|保存|构建|推送|提交|开发|扫描|打包|部署|搜索|查询|查找|检查|制作|搭建|自检|确认|验证|查看|看看|测试|分析|设计|翻译|总结|解决|修复|定位|排查|做一个|建一个|开发一个")
@@ -265,7 +265,7 @@ object DeepSeekDirect {
                 while (true) {
                     round++
                     if (round > MAX_ROUNDS) {
-                        onError("工具循环超过 $MAX_ROUNDS 轮仍未结束，已停止")
+                        onError("已达工具循环上限($MAX_ROUNDS轮)，任务未收敛。请拆分指令后重试")
                         return@Thread
                     }
                     // 缓冲本轮文字：工具轮里的旁白（"我先查看/正在下载"）直接丢弃，

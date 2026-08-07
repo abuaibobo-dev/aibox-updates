@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat
 import android.view.Gravity
 import android.view.Window
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 /** 统一的圆角灰白弹窗，替代系统 AlertDialog */
@@ -62,17 +63,27 @@ object Ui {
         setOnClickListener { onClick() }
     }
 
-    /** 单选列表弹窗 */
+    /** 单选列表弹窗：列表项过多时可上下滚动（固定高度 65% 屏高，内嵌 ScrollView） */
     fun sheet(ctx: Context, title: String, items: List<String>, onPick: (Int) -> Unit) {
         val (d, root) = base(ctx)
         root.addView(title(ctx, title))
+        val scroller = ScrollView(ctx).apply { isVerticalScrollBarEnabled = true }
+        val listRoot = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         items.forEachIndexed { i, it ->
             val tv = item(ctx, it) { d.dismiss(); onPick(i) }
             tv.setPadding(dp(ctx, 12f), dp(ctx, 12f), dp(ctx, 12f), dp(ctx, 12f))
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             lp.topMargin = dp(ctx, 6f)
-            root.addView(tv, lp)
+            listRoot.addView(tv, lp)
         }
+        scroller.addView(listRoot)
+        val scLp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0)
+        scLp.weight = 1f
+        scLp.topMargin = dp(ctx, 6f)
+        root.addView(scroller, scLp)
+        val h = (ctx.resources.displayMetrics.heightPixels * 0.65f).toInt()
+        d.setContentView(root, LinearLayout.LayoutParams(dp(ctx, 300f), h))
+        d.window?.setLayout(dp(ctx, 300f), h)
         d.show()
     }
 
