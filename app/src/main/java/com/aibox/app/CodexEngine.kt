@@ -381,15 +381,20 @@ object CodexEngine {
      */
     fun installToolchain(ctx: Context, onStatus: (String) -> Unit, onDone: (Boolean, String) -> Unit) {
         Thread {
+            val p = paths(ctx)
+            val log = { m: String -> appendRunLog(ctx, "\n[工具链 ${System.currentTimeMillis()}] $m") }
             try {
-                val p = paths(ctx)
                 val tar = File(p.cache, "static-tools.tar.gz")
+                log("开始安装，prefix=${p.prefix.absolutePath}")
                 onStatus("正在下载静态工具链（约 26MB）…")
+                p.cache.mkdirs()
                 download(URL_TOOLS, tar) { cur, total ->
                     onStatus("下载静态工具链 ${cur / 1024 / 1024}/${total / 1024 / 1024} MB")
                 }
+                log("下载完成 size=${tar.length()}")
                 onStatus("正在解压到引擎目录…")
                 untar(tar, p.prefix)
+                log("解压完成")
                 // 软链到 bin，确保 PATH 里直接可用。
                 // 注意：busybox 是包内真实文件，绝不能删除重建（自引用软链会把工具链弄坏），
                 // 只对 wget/sh 建指向 busybox 的软链。
@@ -405,21 +410,31 @@ object CodexEngine {
                 link("sh", "busybox")
                 link("python3", "../lib/python/bin/python3.12")
                 link("python", "../lib/python/bin/python3.12")
-                listOf(File(bin, "busybox"), File(p.prefix, "lib/ld-musl-aarch64.so.1")).forEach {
-                    runCatching { android.system.Os.chmod(it.absolutePath, 0x1ED) }
+                // 关键：python3.12 与 pip 必须可执行（untar 不保留执行位，直接 exec 会 EACCES）
+                listOf(
+                    File(bin, "busybox"),
+                    File(p.prefix, "lib/ld-musl-aarch64.so.1"),
+                    File(p.prefix, "lib/python/bin/python3.12"),
+                    File(p.prefix, "lib/python/bin/pip"),
+                    File(p.prefix, "lib/python/bin/pip3"),
+                    File(p.prefix, "lib/python/bin/pip3.12")
+                ).forEach { f ->
+                    if (f.exists()) runCatching { android.system.Os.chmod(f.absolutePath, 0x1ED) }
                 }
-                // 验证可用性：直接用静态 busybox 跑（不依赖引擎 bash/PATH）
+                // 验证可用性：用干净环境（去掉 termux-exec 的 LD_PRELOAD，避免 bionic 库注入 musl 进程）
                 val bb = File(bin, "busybox")
-                val v = runBin(ctx, bb, listOf("wget", "--version"), 15, p)
+                val v = runBin(ctx, bb, listOf("busybox", "--help"), 15, p, preload = false)
                 val py = File(p.prefix, "lib/python/bin/python3.12")
                 val pyOk = runBin(ctx, File(p.lib, "ld-musl-aarch64.so.1"),
-                    listOf("--library-path", p.prefix.absolutePath + "/lib/python/lib", py.absolutePath, "--version"), 20, p)
+                    listOf("--library-path", p.prefix.absolutePath + "/lib/python/lib", py.absolutePath, "--version"), 20, p, preload = false)
                 val bbOk = v.output?.contains("BusyBox") == true
                 val pythonOk = pyOk.output?.contains("Python") == true
+                log("验证 busybox=${v.output?.take(60) ?: v.detail} python=${pyOk.output?.take(60) ?: pyOk.detail}")
                 onDone(bbOk && pythonOk,
                     if (bbOk && pythonOk) "静态工具链就绪：BusyBox + Python 3.12"
-                    else "部分验证失败：busybox=${v.output?.take(80) ?: "?"} python=${pyOk.output?.take(80) ?: "?"}")
+                    else "部分验证失败：busybox=${v.output?.take(80) ?: v.detail} python=${pyOk.output?.take(80) ?: pyOk.detail}")
             } catch (e: Exception) {
+                log("安装失败：${e.message ?: e.javaClass.simpleName}")
                 onDone(false, "安装失败：${e.message ?: e.javaClass.simpleName}")
             }
         }.start()
@@ -624,11 +639,13 @@ object CodexEngine {
         return r.output
     }
 
-    /** 带超时与错误捕获的执行；output 为空即执行失败 */
-    private fun runBin(ctx: Context, bin: File, args: List<String>, timeoutSec: Long, p: Paths): RunResult {
+    /** 带超时与错误捕获的执行；output 为空即执行失败。preload=false 时不注入 termux-exec 的 LD_PRELOAD */
+    private fun runBin(ctx: Context, bin: File, args: List<String>, timeoutSec: Long, p: Paths, preload: Boolean = true): RunResult {
         return try {
             val pb = ProcessBuilder(listOf(bin.absolutePath) + args)
-            pb.environment().putAll(env(ctx, p))
+            val e = env(ctx, p).toMutableMap()
+            if (!preload) e.remove("LD_PRELOAD")
+            pb.environment().putAll(e)
             pb.redirectErrorStream(true)
             val proc = pb.start()
             val out = AtomicReference<String>()
@@ -1125,6 +1142,11 @@ object CodexEngine {
                         outFile.parentFile?.mkdirs()
                         FileOutputStream(outFile).use { out ->
                             while (true) { val n = tar.read(buf); if (n < 0) break; out.write(buf, 0, n) }
+                        }
+                        // 保留 tar 里的执行位（Android 解压不会自动带 +x，直接 exec 会 EACCES）
+                        val mode = entry.mode and 0x1FF
+                        if (mode != 0) {
+                            runCatching { android.system.Os.chmod(outFile.absolutePath, mode) }
                         }
                     }
                     entry = tar.nextEntry as? org.apache.commons.compress.archivers.tar.TarArchiveEntry

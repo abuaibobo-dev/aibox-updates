@@ -25,7 +25,7 @@ object DeepSeekDirect {
 
     private const val API = "https://api.deepseek.com/chat/completions"
     private const val MODEL = "deepseek-chat"
-    private const val MAX_ROUNDS = 8
+    private const val MAX_ROUNDS = 16
     private const val TOOL_TIMEOUT_SEC = 30L
     private const val OUT_LIMIT = 8000
     private val JSON = "application/json; charset=utf-8".toMediaType()
@@ -406,7 +406,10 @@ object DeepSeekDirect {
         // 简洁回复约束：直给答案、不客套、不重复问题，除非用户要求详细
         out.put(JSONObject().put("role", "system").put("content",
             "你是一个简洁的助手。直接给答案，不要客套话，不要复述问题，不要多余的铺垫和总结。" +
-            "除非用户明确要求详细解释，否则回复控制在 3~5 句以内；能用列表就用短列表。"))
+            "除非用户明确要求详细解释，否则回复控制在 3~5 句以内；能用列表就用短列表。" +
+            "环境说明：本机是手机沙盒，apt/pkg 的安装路径被写死且不可写，无法安装任何软件包，不要反复尝试安装。" +
+            "python3 / wget / sh / busybox 已预装可直接使用。同一个命令失败不要重复尝试超过 2 次，" +
+            "连续失败时改用 read_file / write_file 排查，或直接告诉用户原因和替代方案。"))
         fun append(role: String, content: String) {
             if (content.isBlank()) return
             val c = content.trim()

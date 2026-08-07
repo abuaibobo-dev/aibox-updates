@@ -59,7 +59,8 @@
 
         <service
             android:name=".ChatForegroundService"
-            android:exported="false" />
+            android:exported="false"
+            android:stopWithTask="false" />
 
         <receiver
             android:name=".LatterWidget"

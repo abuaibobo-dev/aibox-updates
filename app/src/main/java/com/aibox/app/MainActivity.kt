@@ -118,6 +118,21 @@ class MainActivity : AppCompatActivity() {
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 9002)
         }
+        val sPrefs = getSharedPreferences("settings", MODE_PRIVATE)
+        // 开启过"后台保活"则常驻前台服务，切后台不中断
+        if (sPrefs.getBoolean("keepalive", false)) {
+            ChatForegroundService.start(this)
+        }
+        // 首次启动申请电池优化白名单：防止息屏/切后台时进程被冻结导致"无回复/中断"
+        if (!sPrefs.getBoolean("asked_battery", false)) {
+            sPrefs.edit().putBoolean("asked_battery", true).apply()
+            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+                } catch (_: Exception) {}
+            }
+        }
 
         drawer = findViewById(R.id.drawerLayout)
         showCrashNoticeIfAny()

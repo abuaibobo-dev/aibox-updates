@@ -141,6 +141,12 @@ class SettingsActivity : AppCompatActivity() {
             refreshSandboxStatus()
             Toast.makeText(this, "已取消文件夹授权", Toast.LENGTH_SHORT).show()
         }
+        val swKeepalive = findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.swKeepalive)
+        swKeepalive.isChecked = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("keepalive", false)
+        swKeepalive.setOnCheckedChangeListener { _, checked ->
+            getSharedPreferences("settings", MODE_PRIVATE).edit().putBoolean("keepalive", checked).apply()
+            if (checked) ChatForegroundService.start(this) else ChatForegroundService.stop(this)
+        }
         btnBattery = findViewById(R.id.btnBattery)
         btnBattery.setOnClickListener {
             val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
