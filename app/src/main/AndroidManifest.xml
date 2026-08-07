@@ -65,7 +65,7 @@
         <receiver
             android:name=".LatterWidget"
             android:exported="true"
-            android:label="Latter">
+            android:label="Synaps">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

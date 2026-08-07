@@ -427,7 +427,7 @@ object DeepSeekDirect {
         if (!bash.exists()) return "错误：运行环境未安装（bash 不存在），请先初始化引擎"
         val pb = ProcessBuilder(bash.absolutePath, "-c", cmd)
         // 完整继承引擎环境：termux-exec 路径重定向、CA 证书、GitHub token、可写 TMPDIR 等
-        pb.environment().putAll(CodexEngine.env(ctx, p))
+        pb.environment().putAll(CodexEngine.env(ctx, p, preload = false))
         pb.directory(workDir(ctx))
         pb.redirectErrorStream(true)
         return try {
@@ -467,6 +467,7 @@ object DeepSeekDirect {
             "除非用户明确要求详细解释，否则回复控制在 3~5 句以内；能用列表就用短列表。" +
             "环境说明：本机是手机沙盒（无 root），应用私有目录与外部存储（/sdcard）均可读写，网络可用（HTTPS）。" +
             "apt/pkg 二进制路径被编译写死、无法安装系统包。python3 / wget / sh / busybox 已预装可直接使用。" +
+            "环境已移除坏 LD_PRELOAD，pip 可直接使用：装库优先 pip install --no-index --find-links=<wheel目录>，或下载 wheel 解压后加 PYTHONPATH。" +
             "重要：沙盒内 Python/wget 等工具因 Android 无 /etc/resolv.conf，DNS 解析会失败（gaierror）。需要联网时优先用 http_get / download_file 工具（由 App 直接联网）：" +
             "装第三方库请用 download_file 下载 wheel（可先 http_get https://pypi.org/pypi/<包名>/json 查下载地址），再用 pip install --no-index --find-links=<目录> 或解压后加 PYTHONPATH 使用。" +
             "文件读写支持绝对路径（/sdcard/...）或相对工作目录路径。同一个命令失败不要重复尝试超过 3 次，" +

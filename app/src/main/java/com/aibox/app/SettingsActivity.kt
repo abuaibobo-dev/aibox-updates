@@ -478,7 +478,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun aboutText(): String {
         val v = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" }
-        return "Latter v$v\n" +
+        return "Synaps v$v\n" +
             "内嵌 Codex 引擎 ${CodexEngine.VERSION}\n\n" +
             "这是一个真正自主的智能体：能思考、能执行命令、能下载依赖、能自己修复代码，全部在手机本机运行，无需 Termux。\n\n" +
             "当前服务商：${CodexEngine.providerLabel(CodexEngine.provider(this))}。"

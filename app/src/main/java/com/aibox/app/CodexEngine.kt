@@ -223,7 +223,7 @@ object CodexEngine {
         return try {
             val req = Request.Builder()
                 .url(url)
-                .header("User-Agent", "Latter/2.0")
+                .header("User-Agent", "Synaps/2.0")
                 .header("Authorization", "Bearer $key")
                 .build()
             client.newCall(req).execute().use { resp ->
@@ -277,7 +277,7 @@ object CodexEngine {
         return try {
             val req = Request.Builder()
                 .url("https://api.deepseek.com/user/balance")
-                .header("User-Agent", "Latter/2.0")
+                .header("User-Agent", "Synaps/2.0")
                 .header("Authorization", "Bearer $key")
                 .build()
             client.newCall(req).execute().use { resp ->
@@ -308,7 +308,7 @@ object CodexEngine {
         return try {
             val req = Request.Builder()
                 .url("https://openrouter.ai/api/v1/auth/key")
-                .header("User-Agent", "Latter/2.0")
+                .header("User-Agent", "Synaps/2.0")
                 .header("Authorization", "Bearer $key")
                 .build()
             client.newCall(req).execute().use { resp ->
@@ -554,7 +554,7 @@ object CodexEngine {
         return try {
             val req = Request.Builder()
                 .url("https://api.github.com/repos/abuaibobo-dev/aibox-updates/releases/latest")
-                .header("User-Agent", "Latter/2.0")
+                .header("User-Agent", "Synaps/2.0")
                 .build()
             client.newCall(req).execute().use { resp ->
                 if (resp.code !in 200..299) return@use "检查失败（HTTP ${resp.code}）"
@@ -584,7 +584,7 @@ object CodexEngine {
                 val p = paths(ctx)
                 val req = Request.Builder()
                     .url("https://api.github.com/repos/abuaibobo-dev/aibox-updates/releases/latest")
-                    .header("User-Agent", "Latter/2.0")
+                    .header("User-Agent", "Synaps/2.0")
                     .build()
                 var url = ""
                 var tag = "latest"
@@ -838,7 +838,7 @@ object CodexEngine {
 
     // ---------------- 内部实现 ----------------
 
-    internal fun env(ctx: Context, p: Paths): Map<String, String> {
+    internal fun env(ctx: Context, p: Paths, preload: Boolean = true): Map<String, String> {
         val suPaths = listOf("/system/bin", "/system/xbin", "/sbin", "/su/bin", "/vendor/bin", "/system/sbin")
         val base = System.getenv("PATH") ?: suPaths.joinToString(":")
         val ca = File(p.prefix, "etc/ssl/certs/ca-certificates.crt").absolutePath
@@ -869,7 +869,7 @@ object CodexEngine {
             put("PATH", "${p.bin.absolutePath}:$base")
             put("LD_LIBRARY_PATH", p.lib.absolutePath)
             put("TMPDIR", p.tmp.absolutePath)
-            termuxExec?.let { put("LD_PRELOAD", it.absolutePath) }
+            if (preload) termuxExec?.let { put("LD_PRELOAD", it.absolutePath) }
             put("TERM", "xterm-256color")
             put("NO_COLOR", "1")
             put("SSL_CERT_FILE", ca)
