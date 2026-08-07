@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色主题（Synaps 规范：深空灰 + 品牌蓝 #4D6BFE） -->
+    <color name="bg">#1E1E1E</color>
+    <color name="bg_settings">#1C1C1E</color>
+    <color name="aurora_top">#1E1E1E</color>
+    <color name="primary">#4D6BFE</color>
+    <color name="primary_dark">#5B7CFA</color>
+    <color name="accent_blue">#4D6BFE</color>
+    <color name="accent_purple">#4D6BFE</color>
+    <color name="accent_cyan">#4D6BFE</color>
+
+    <color name="glass_fill">#232327</color>
+    <color name="glass_card_fill">#B8232327</color>
+    <color name="glass_fill_strong">#2A2A2E</color>
+    <color name="glass_input_fill">#2A2A2A</color>
+    <color name="glass_header_fill">#1E1E1E</color>
+    <color name="glass_stroke">#2A2A2A</color>
+    <color name="glass_stroke_dim">#232327</color>
+    <color name="glass_bubble_ai">#262628</color>
+    <color name="glass_teal">#00000000</color>
+
+    <color name="text_primary">#E5E5E5</color>
+    <color name="text_secondary">#A1A1AA</color>
+    <color name="text_placeholder">#8C8C8C</color>
+    <color name="divider">#2A2A2A</color>
+
+    <color name="user_bubble">#2F343C</color>
+    <color name="ai_bubble">#262628</color>
+    <color name="text_on_bubble">#E5E5E5</color>
+
+    <color name="ic_launcher_bg">#1E1E1E</color>
+
+    <color name="surface_1">#2A2A2E</color>
+    <color name="surface_2">#232327</color>
+    <color name="surface_3">#2A2A2E</color>
+    <color name="stroke_1">#2A2A2A</color>
+    <color name="stroke_2">#232327</color>
+    <color name="stroke_3">#3A3A3E</color>
+    <color name="btn_fill">#2F343C</color>
+    <color name="btn_stroke">#3A3A3E</color>
+    <color name="btn_secondary_fill">#2A2A2E</color>
+    <color name="btn_secondary_stroke">#3A3A3E</color>
+    <color name="danger_fill">#3A2E32</color>
+    <color name="danger_stroke">#5A3A42</color>
+    <color name="danger_text">#FF9B9B</color>
+    <color name="input_focus_glow">#264D6BFE</color>
+    <color name="primary_soft">#664D6BFE</color>
+    <color name="warning">#FFB340</color>
+    <color name="header_line">#2A2A2A</color>
+    <color name="inputbar_fill">#1E1E1E</color>
+    <color name="icon_color">#D7DEE8</color>
+    <color name="icon_dim">#9CA5B3</color>
+    <color name="avatar_fill">#2F343C</color>
+    <color name="avatar_stroke">#3A3A3E</color>
+    <color name="welcome_card_fill">#232327</color>
+    <color name="welcome_card_stroke">#2A2A2A</color>
+    <color name="input_codex_bg">#2A2A2A</color>
+    <color name="input_codex_stroke">#3A3A3A</color>
+    <color name="chip_codex_bg">#2F343C</color>
+    <color name="chip_codex_text">#E5E5E5</color>
+    <color name="send_codex_bg">#FFFFFF</color>
+    <color name="send_codex_icon">#1C1C1E</color>
+
+    <color name="sidebar_bg">#171717</color>
+    <color name="dialog_bg">#1E1E1E</color>
+    <color name="dialog_item">#2A2A2A</color>
+    <color name="dialog_btn">#2F343C</color>
+    <color name="dialog_title">#E5E5E5</color>
+    <color name="dialog_text">#A1A1AA</color>
+    <color name="dialog_stroke">#2A2A2A</color>
+</resources>

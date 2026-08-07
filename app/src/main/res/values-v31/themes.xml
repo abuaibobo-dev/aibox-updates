@@ -1,0 +1,22 @@
+<resources>
+    <style name="Theme.AIToolbox" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/aurora_top</item>
+        <item name="android:navigationBarColor">@color/aurora_top</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <!-- Android 12+ 系统启动窗口：纯黑 + 无图标 -->
+        <item name="android:windowSplashScreenBackground">#000000</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+    <style name="Theme.AIToolbox.Splash" parent="Theme.AIToolbox">
+        <item name="android:windowBackground">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowSplashScreenBackground">#000000</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>

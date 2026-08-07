@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        android:visibility="gone"/>
+
+    <TextView
+        android:id="@+id/tvBody"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_primary"
+        android:textSize="15sp"
+        android:lineSpacingExtra="4dp"
+        android:textIsSelectable="true"/>
+
+    <ImageButton
+        android:id="@+id/btnCopy"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_marginTop="2dp"
+        android:src="@drawable/ic_copy"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="复制"
+        android:padding="5dp"
+        android:visibility="gone"/>
+</LinearLayout>
