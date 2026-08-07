@@ -116,7 +116,8 @@ object DeepSeekDirect {
 
     /** 带工具循环的对话入口 */
     fun chatWithTools(ctx: Context, history: List<Pair<String, String>>, prompt: String, key: String,
-                      onDelta: (String) -> Unit, onTool: (String, String) -> Unit,
+                      onDelta: (String) -> Unit, onToolStart: (String, String) -> Unit = { _, _ -> },
+                      onTool: (String, String) -> Unit,
                       onUsage: (Long) -> Unit = {},
                       onDone: (String) -> Unit, onError: (String) -> Unit) {
         Thread {
@@ -144,6 +145,7 @@ object DeepSeekDirect {
                         }
                         msgs.put(JSONObject().put("role", "assistant").put("content", "").put("tool_calls", tcs))
                         for (tc in turn.toolCalls) {
+                            onToolStart(tc.name, describeTool(tc, "…"))
                             val result = executeTool(ctx, tc)
                             onTool(tc.name, describeTool(tc, result))
                             msgs.put(JSONObject()
@@ -463,18 +465,11 @@ object DeepSeekDirect {
         val out = JSONArray()
         // 简洁回复约束：直给答案、不客套、不重复问题，除非用户要求详细
         out.put(JSONObject().put("role", "system").put("content",
-            "你是一个简洁的助手。直接给答案，不要客套话，不要复述问题，不要多余的铺垫和总结。" +
-            "除非用户明确要求详细解释，否则回复控制在 3~5 句以内；能用列表就用短列表。" +
-            "环境说明：本机是手机沙盒（无 root），应用私有目录与外部存储（/sdcard）均可读写，网络可用（HTTPS）。" +
-            "apt/pkg 二进制路径被编译写死、无法安装系统包。python3 / wget / sh / busybox 已预装可直接使用。" +
-            "环境已移除坏 LD_PRELOAD，pip 可直接使用：装库优先 pip install --no-index --find-links=<wheel目录>，或下载 wheel 解压后加 PYTHONPATH。" +
-            "联网：环境已注入本地代理（http_proxy/https_proxy 指向 App 内置代理 127.0.0.1，DNS 由 App 进程解析），python/curl/wget/pip 可直接联网，无需绕行。" +
-            "装第三方库可直接 pip 在线安装（可加 -i https://pypi.org/simple），或用 download_file 下载 wheel 后 pip install --no-index --find-links=<目录> 使用。" +
-            "numpy/scipy/pandas 等 musl C 科学库会触发 seccomp 拦截（SIGSYS 31）被杀，不要反复尝试；纯 Python 库（requests/bs4/jinja2 等）全部可用。" +
-            "若要 python 直连网络或跑科学计算：用 download_file 从 Termux 官方源 packages.termux.dev/apt/termux-main/pool/main/ 下载 bionic(Android 原生) 版 python 及依赖 .deb 解压到可写目录并设 LD_LIBRARY_PATH，bionic 版无 DNS/seccomp 限制。" +
-            "HTTPS 证书已内置（119 个根证书）无需额外处理。写 /sdcard 需用户在系统设置→特殊权限→所有文件访问 中授权，未授权时 /sdcard 只读。" +
-            "文件读写支持绝对路径（/sdcard/...）或相对工作目录路径。同一个命令失败不要重复尝试超过 3 次，" +
-            "连续失败时改用 read_file / write_file 排查，或直接告诉用户原因和替代方案。"))
+            "回复规则（必须遵守）：直接给答案，默认不超过 3~5 句，用户明确要求详细才展开。不客套、不复述问题、不要铺垫和总结、不重复已说内容。能用列表就用短列表。" +
+            "每次执行完工具（命令）后，用 1 句重点总结：只讲结果和关键信息，不重复命令内容、不说废话，然后决定下一步；不要静默连续执行多个工具。" +
+            "总结后按需附上：建议（下一步怎么优化）、补充（关键细节）、提示（注意事项），每条 1 句以内，不相关就不写。" +
+            "环境：手机沙盒（无 root）。python3/wget/sh/busybox 已装；已配本地代理，python/curl/pip 可在线联网装库（pip install 或 download_file 下 wheel）；纯 Python 库全可用；numpy/scipy/pandas 等 musl C 库会触发系统 seccomp（SIGSYS 31）被杀，勿试。" +
+            "文件读写支持绝对路径（/sdcard 需用户授权）或相对工作目录。命令失败不重复超 3 次，连续失败改用 read_file/write_file 排查或直接说明。"))
         fun append(role: String, content: String) {
             if (content.isBlank()) return
             val c = content.trim()

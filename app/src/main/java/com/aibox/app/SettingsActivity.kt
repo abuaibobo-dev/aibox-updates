@@ -398,9 +398,13 @@ class SettingsActivity : AppCompatActivity() {
         super.onResume()
         refreshSandboxStatus()
         refreshBatteryLabel()
-        // 引擎能力全开：进入设置页时把尚未授权的权限再请求一遍（已授权的不会重复弹窗）
-        val need = Perms.missing(this)
-        if (need.isNotEmpty()) requestPermissions(need, 9003)
+        // 引擎能力全开：仅首次进入设置页请求一次全部权限（避免每次进设置都弹窗干扰操作）
+        val sp = getSharedPreferences("settings", MODE_PRIVATE)
+        if (!sp.getBoolean("settings_asked_perms", false)) {
+            sp.edit().putBoolean("settings_asked_perms", true).apply()
+            val need = Perms.missing(this)
+            if (need.isNotEmpty()) requestPermissions(need, 9003)
+        }
     }
 
     private fun refreshSandboxStatus() {

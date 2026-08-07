@@ -40,6 +40,48 @@ class MsgAdapter(
         }
     }
 
+    /** AI 回复中的 建议/补充/提示 关键词按颜色高亮 */
+    private fun tintKeywords(text: String): CharSequence {
+        val sp = android.text.SpannableString(text)
+        val rules = listOf(
+            Regex("建议[:：]") to 0xFF4D6BFE.toInt(),
+            Regex("补充[:：]") to 0xFF34C759.toInt(),
+            Regex("提示[:：]") to 0xFFFF9500.toInt(),
+            Regex("总结[:：]") to 0xFF8A8F9C.toInt()
+        )
+        for ((re, color) in rules) {
+            for (m in re.findAll(text)) {
+                sp.setSpan(android.text.style.ForegroundColorSpan(color), m.range.first, m.range.last + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                sp.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), m.range.first, m.range.last + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+        return sp
+    }
+
+    private fun startPulse(holder: RecyclerView.ViewHolder, v: View) {
+        val a = android.animation.ValueAnimator.ofFloat(0.35f, 1f).apply {
+            duration = 650
+            repeatCount = android.animation.ValueAnimator.INFINITE
+            repeatMode = android.animation.ValueAnimator.REVERSE
+            addUpdateListener { va -> v.alpha = va.animatedValue as Float }
+        }
+        when (holder) {
+            is VHAi -> holder.pulse = a
+            is VHSys -> holder.pulse = a
+            else -> {}
+        }
+        a.start()
+    }
+
+    private fun stopPulse(holder: RecyclerView.ViewHolder) {
+        val old = when (holder) {
+            is VHAi -> holder.pulse
+            is VHSys -> holder.pulse
+            else -> null
+        }
+        old?.cancel()
+    }
+
     override fun getItemViewType(pos: Int): Int = when (items[pos].role) {
         "user" -> 0
         "ai" -> 1
@@ -60,8 +102,12 @@ class MsgAdapter(
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, pos: Int) {
         val m = items[pos]
         val collapsible = shouldCollapse(m.content, m.role)
-        val shown = if (collapsible && !m.expanded) HINT else m.content
+        val count = m.content.lines().count { it.isNotBlank() }
+        val hint = if (count > 1) "🔧 工具调用 ×$count（点击展开）" else HINT
+        val shown = if (collapsible && !m.expanded) hint else m.content
         val click: (View) -> Unit = { if (collapsible) { m.expanded = !m.expanded; notifyItemChanged(pos) } }
+        stopPulse(holder)
+        holder.itemView.alpha = 1f
         when (holder) {
             is VHUser -> {
                 holder.body.text = shown.ifEmpty { "…" }
@@ -72,7 +118,7 @@ class MsgAdapter(
                 }
             }
             is VHAi -> {
-                holder.body.text = shown.ifEmpty { "…" }
+                holder.body.text = tintKeywords(shown.ifEmpty { "…" })
                 holder.body.setTextColor(ContextCompat.getColor(
                     holder.itemView.context,
                     if (m.content.startsWith("⚠️")) R.color.warning else R.color.text_primary
@@ -84,11 +130,15 @@ class MsgAdapter(
                     onAiLongClick(pos)
                     true
                 }
+                // 思考动画：占位气泡呼吸脉动
+                if (m.content == "思考中…") startPulse(holder, holder.body)
             }
             is VHSys -> {
                 holder.body.text = shown
                 holder.body.visibility = if (m.content.isBlank()) View.GONE else View.VISIBLE
                 holder.body.setOnClickListener(click)
+                // 执行动画：⏳ 执行中消息呼吸脉动
+                if (m.content.startsWith("⏳")) startPulse(holder, holder.body)
             }
         }
     }
@@ -100,10 +150,12 @@ class MsgAdapter(
     class VHAi(v: View) : RecyclerView.ViewHolder(v) {
         val body: TextView = v.findViewById(R.id.tvBody)
         val copy: ImageButton = v.findViewById(R.id.btnCopy)
+        var pulse: android.animation.ValueAnimator? = null
     }
 
     class VHSys(v: View) : RecyclerView.ViewHolder(v) {
         val body: TextView = v.findViewById(R.id.tvBody)
+        var pulse: android.animation.ValueAnimator? = null
     }
 }
 

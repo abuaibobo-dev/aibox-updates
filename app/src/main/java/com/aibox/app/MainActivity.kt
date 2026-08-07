@@ -65,6 +65,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvTitle: TextView
     private lateinit var tvEngineState: TextView
     private lateinit var tvTokens: TextView
+    private lateinit var btnRefreshBalance: ImageButton
     private lateinit var layWelcome: LinearLayout
     private lateinit var attachScroll: HorizontalScrollView
     private lateinit var attachBar: LinearLayout
@@ -96,6 +97,10 @@ class MainActivity : AppCompatActivity() {
     private var autoRetry = false
     private var failoverBudget = 0
     private var lastUserText = ""
+    /** 当前 AI 回复气泡在消息列表中的位置（工具消息按时间线插到它之前） */
+    private var asstIdx = -1
+    /** 最近一次余额查询结果（完整文本，点击 chip 展示） */
+    private var lastBalanceFull = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(getSharedPreferences("theme", MODE_PRIVATE).getInt("mode", AppCompatDelegate.MODE_NIGHT_NO))
@@ -178,6 +183,15 @@ class MainActivity : AppCompatActivity() {
         tvTitle = findViewById(R.id.tvTitle)
         tvEngineState = findViewById(R.id.tvEngineState)
         tvTokens = findViewById(R.id.tvTokens)
+        tvTokens.setOnClickListener {
+            if (lastBalanceFull.isNotBlank()) {
+                Toast.makeText(this, lastBalanceFull, Toast.LENGTH_LONG).show()
+            }
+            refreshBalance()
+        }
+        btnRefreshBalance = findViewById(R.id.btnRefreshBalance)
+        btnRefreshBalance.setOnClickListener { refreshBalance() }
+        refreshBalance()
         layWelcome = findViewById(R.id.layWelcome)
         attachScroll = findViewById(R.id.attachScroll)
         attachBar = findViewById(R.id.attachBar)
@@ -276,6 +290,7 @@ class MainActivity : AppCompatActivity() {
         }
         refreshEngineState()
         refreshSessions()
+        refreshBalance()
         if (!CodexEngine.isInitialized(this)) {
             openingEngine = false
             startEngine()
@@ -370,7 +385,7 @@ class MainActivity : AppCompatActivity() {
         messages.clear()
         adapter.notifyDataSetChanged()
         tvTitle.text = "新对话"
-        tvTokens.visibility = View.GONE
+        refreshBalance()
         layWelcome.visibility = View.VISIBLE
         drawer.closeDrawers()
         busy = false
@@ -442,7 +457,7 @@ class MainActivity : AppCompatActivity() {
             adapter.notifyItemInserted(messages.size - 1)
         }
         lastUserText = text
-        val asstIdx = messages.size
+        asstIdx = messages.size
         // 先给一个可见的"思考中"占位，避免发送后气泡空白让用户以为卡死
         messages.add(ChatMsg("ai", AI_THINKING))
         adapter.notifyItemInserted(asstIdx)
@@ -514,10 +529,19 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 },
-                onUsage = { total ->
+                onUsage = {},
+                onToolStart = { name, brief ->
                     main.post {
-                        tvTokens.visibility = View.VISIBLE
-                        tvTokens.text = "⚡ " + String.format("%,d", total)
+                        val label = when (name) {
+                            "exec_command" -> "🔧 执行命令"
+                            "read_file" -> "📄 读取文件"
+                            "write_file" -> "✏️ 写入文件"
+                            "web_search" -> "🌐 联网搜索"
+                            "download_file" -> "⬇️ 下载文件"
+                            "http_get" -> "🌐 请求网页"
+                            else -> "🛠 $name"
+                        }
+                        appendToolMsg("⏳ $label 执行中…")
                     }
                 },
                 onTool = { name, brief ->
@@ -527,11 +551,11 @@ class MainActivity : AppCompatActivity() {
                             "read_file" -> "📄 读取文件"
                             "write_file" -> "✏️ 写入文件"
                             "web_search" -> "🌐 联网搜索"
+                            "download_file" -> "⬇️ 下载文件"
+                            "http_get" -> "🌐 请求网页"
                             else -> "🛠 $name"
                         }
-                        messages.add(ChatMsg("sys", "$label：$brief"))
-                        adapter.notifyItemInserted(messages.size - 1)
-                        scrollBottom()
+                        finishToolMsg("$label：$brief")
                     }
                 },
                 onDone = { _ ->
@@ -541,6 +565,7 @@ class MainActivity : AppCompatActivity() {
                         busy = false
                         updateSendBtn()
                         doneSave.run()
+                        refreshBalance()
                     }
                 },
                 onError = { e ->
@@ -601,9 +626,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     "tool" -> {
                         events.add("tool" to ev.text)
-                        messages.add(ChatMsg("sys", "🔧 ${ev.text}"))
-                        adapter.notifyItemInserted(messages.size - 1)
-                        scrollBottom()
+                        appendToolMsg("🔧 ${ev.text}")
                     }
                     "error" -> {
                         messages[asstIdx].content = if (messages[asstIdx].content == AI_THINKING)
@@ -652,6 +675,7 @@ class MainActivity : AppCompatActivity() {
                             CodexEngine.addUsage(this, messages[asstIdx].content.length)
                             notifyDone(messages[asstIdx].content.take(80))
                         }
+                        refreshBalance()
                     }
                 }
             }
@@ -909,6 +933,62 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "技能：${skills[which].first}", Toast.LENGTH_SHORT).show()
         }
         Unit
+    }
+
+    /** 顶栏 chip + 刷新按钮：显示账户余额（token 消耗改为余额） */
+    private fun refreshBalance() {
+        val key = CodexEngine.apiKey(this)
+        if (key.isBlank()) {
+            tvTokens.visibility = View.GONE
+            btnRefreshBalance.visibility = View.GONE
+            return
+        }
+        Thread {
+            val full = CodexEngine.fetchBalance(this, key)
+            val short = shortBalance(full)
+            main.post {
+                lastBalanceFull = full
+                tvTokens.visibility = View.VISIBLE
+                btnRefreshBalance.visibility = View.VISIBLE
+                tvTokens.text = short
+            }
+        }.start()
+    }
+
+    /** 把完整余额文本压成一行；失败显示"余额 ?" */
+    private fun shortBalance(full: String): String {
+        if (full.isBlank() || full.startsWith("查询失败") || full.startsWith("该服务商")) return "余额 ?"
+        val curRaw = Regex("^([A-Za-z$¥￥]+)\\s*余额：").find(full)?.groupValues?.get(1) ?: "$"
+        val cur = if (curRaw.equals("CNY", true)) "¥" else if (curRaw.contains("$") || curRaw.equals("USD", true)) "$" else curRaw
+        val num = Regex("余额：([0-9.,]+)").find(full)?.groupValues?.get(1)
+            ?: Regex("剩余额度：\$?([0-9.,]+)").find(full)?.groupValues?.get(1)
+        return if (num != null) "余额 $cur$num" else "余额 ?"
+    }
+
+    /** 合并连续工具调用为一条可展开消息；按时间线插到 AI 回复气泡之前（先发生的命令在上，文字回复在下） */
+    private fun appendToolMsg(line: String) {
+        val ai = asstIdx
+        if (ai > 0 && messages[ai - 1].role == "sys" && (messages[ai - 1].content.startsWith("🔧") || messages[ai - 1].content.startsWith("⏳"))) {
+            messages[ai - 1].content = messages[ai - 1].content + "\n" + line
+            adapter.notifyItemChanged(ai - 1)
+        } else {
+            messages.add(ai, ChatMsg("sys", line))
+            asstIdx++
+            adapter.notifyItemInserted(ai)
+        }
+        scrollBottom()
+    }
+
+    /** 工具执行完成：把最后一条 ⏳ 执行中消息替换为结果；没有则追加 */
+    private fun finishToolMsg(line: String) {
+        val ai = asstIdx
+        if (ai > 0 && messages[ai - 1].role == "sys" && messages[ai - 1].content.startsWith("⏳")) {
+            messages[ai - 1].content = line
+            adapter.notifyItemChanged(ai - 1)
+        } else {
+            appendToolMsg(line)
+        }
+        scrollBottom()
     }
 
     /** 上次启动发生过崩溃时，进主页面弹一次提示，方便拿到堆栈而不是瞎猜 */
