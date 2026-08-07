@@ -815,6 +815,8 @@ object CodexEngine {
                 appendRunLog(ctx, "\n[App] provider=${provider(ctx)} base_url=$cfgBase adapterPort=$ap keyLen=${apiKey(ctx).length}\n")
             } catch (_: Exception) {}
         }
+        // 执行规则包裹：无论走哪个模型，任务型请求都要"真做"，不许只用文字描述动作
+        val finalPrompt = "（执行规则：需要实际操作/写文件/查资料/下载/编译的任务，请立即调用工具执行，禁止只用文字描述你将做什么或假装已经做了；执行期间不输出旁白文字。完成后再给简短结论。）\n\n$prompt"
         val args = mutableListOf(p.codexBin.absolutePath)
         // per-vendor 白名单：只有实测确认不兼容 custom 工具的供应商才关 apply_patch，
         // 其余（含未来新增）默认开启完整工具能力。
@@ -822,10 +824,10 @@ object CodexEngine {
         // 最大权限：danger-full-access 沙盒 + 跳过一切审批（App 外层的 Android 沙盒仍生效）
         val bypass = listOf("--dangerously-bypass-approvals-and-sandbox")
         if (threadId.isNullOrEmpty()) {
-            args += listOf("exec", "--json", "-s", "danger-full-access", "-C", p.work.absolutePath, "--skip-git-repo-check") + bypass + noApplyPatch + listOf(prompt)
+            args += listOf("exec", "--json", "-s", "danger-full-access", "-C", p.work.absolutePath, "--skip-git-repo-check") + bypass + noApplyPatch + listOf(finalPrompt)
         } else {
             // resume 续接：不传 -s/-C（部分引擎版本 resume 子命令不解析，会话本身记录了工作目录与沙箱）
-            args += listOf("exec", "--json", "--skip-git-repo-check") + bypass + noApplyPatch + listOf("resume", threadId, prompt)
+            args += listOf("exec", "--json", "--skip-git-repo-check") + bypass + noApplyPatch + listOf("resume", threadId, finalPrompt)
         }
         val pb = ProcessBuilder(args)
         pb.environment().putAll(env(ctx, p))
