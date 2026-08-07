@@ -23,6 +23,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object DeepSeekDirect {
 
+    /** org.json 的 optString 对 JSONObject.NULL 会返回字面量 "null"（如流式响应中 delta.content=null），
+     *  这里统一转成空串，避免对话界面出现成片 "null" 文本。 */
+    private fun safeText(o: JSONObject?, key: String): String {
+        if (o == null) return ""
+        val v = o.opt(key) ?: return ""
+        return if (v == JSONObject.NULL) "" else v.toString().trim()
+    }
+
     private const val API = "https://api.deepseek.com/chat/completions"
     private const val MODEL = "deepseek-chat"
     private const val MAX_ROUNDS = 60
@@ -376,7 +384,7 @@ object DeepSeekDirect {
                     }
                     if (choices == null || choices.length() == 0) continue
                     val delta = choices.getJSONObject(0).optJSONObject("delta") ?: continue
-                    val content = delta.optString("content")
+                    val content = safeText(delta, "content")
                     if (content.isNotEmpty()) {
                         first.set(true)
                         sb.append(content)
@@ -426,7 +434,7 @@ object DeepSeekDirect {
             val choices = j.optJSONArray("choices")
             if (choices == null || choices.length() == 0) throw IOException("DeepSeek 返回空响应")
             val msg = choices.getJSONObject(0).optJSONObject("message") ?: JSONObject()
-            val text = msg.optString("content")
+            val text = safeText(msg, "content")
             if (text.isNotBlank()) {
                 onDelta(text)
             }
@@ -472,7 +480,7 @@ object DeepSeekDirect {
                     if (f == null) "错误：路径为空"
                     else {
                         f.parentFile?.mkdirs()
-                        f.writeText(j.optString("content"))
+                        f.writeText(safeText(j, "content"))
                         "已写入 ${f.absolutePath}（${f.length()} 字节）"
                     }
                 }
