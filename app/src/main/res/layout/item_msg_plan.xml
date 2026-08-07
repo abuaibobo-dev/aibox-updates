@@ -8,8 +8,9 @@
     android:paddingBottom="4dp">
 
     <LinearLayout
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:maxWidth="560dp"
         android:background="@drawable/bg_chip"
         android:orientation="vertical"
         android:paddingStart="14dp"
@@ -28,10 +29,9 @@
 
         <TextView
             android:id="@+id/tvBody"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:maxWidth="320dp"
             android:lineSpacingExtra="3dp"
             android:textColor="@color/text_primary"
             android:textSize="13sp" />
