@@ -27,12 +27,10 @@ object DeepSeekDirect {
     private const val MODEL = "deepseek-chat"
     private const val MAX_ROUNDS = 60
     private const val TOOL_TIMEOUT_SEC = 300L
-    /** 任务型请求特征词：命中才允许"强制纠正一轮" */
-    private val TASK_RE = Regex("帮我|写一|写个|写|创建|生成|修改|编译|下载|安装|查询|查找|搜索|删除|转换|整理|分析|执行|运行|列出|读取|保存|构建|推送|提交|设计|开发|扫描|打包|部署")
-    /** 强动作请求：第一轮就必须真调工具，纯文字回答直接作废重试 */
-    private val STRONG_RE = Regex("创建|生成|修改|编译|下载|安装|删除|转换|整理|执行|运行|列出|读取|保存|构建|推送|提交|开发|扫描|打包|部署|搜索|查询|查找|检查|制作|搭建|安装")
-    /** 空谈特征词：模型只说"要做"没做 */
-    private val NARRATE_RE = Regex("我先|我来|让我|正在|需要先|准备|打算|这就|马上|立刻|我会|我将")
+    /** 任务/动作型请求：命中则第一轮就必须真调工具，纯文字回答直接作废重试 */
+    private val ACTION_RE = Regex("帮我|写一|写个|写|创建|生成|修改|编译|下载|安装|删除|转换|整理|执行|运行|列出|读取|保存|构建|推送|提交|开发|扫描|打包|部署|搜索|查询|查找|检查|制作|搭建|自检|确认|验证|查看|看看|测试|分析|设计|翻译|总结|解决|修复|定位|排查|做一个|建一个|开发一个")
+    /** 空谈特征词：模型只说"要做"没做（含"现在""先看""确认""用工具"等） */
+    private val NARRATE_RE = Regex("我先|我来|让我|正在|需要先|准备|打算|这就|马上|立刻|我会|我将|现在|开始|先(看|查|建|确认|创建|写|做|用|调用|检查|整理|下载|提交)|确认|看看|检查(一下|下)?|用工具|调用工具|要做|需要做|得先|然后")
     private const val OUT_LIMIT = 16000
     private val JSON = "application/json; charset=utf-8".toMediaType()
     private val client = OkHttpClient.Builder()
@@ -254,7 +252,8 @@ object DeepSeekDirect {
             try {
                 var round = 0
                 var totalUsed = 0L
-                var forcedTool = false
+                var forcedCount = 0
+                val isAction = ACTION_RE.containsMatchIn(prompt)
                 while (true) {
                     round++
                     if (round > MAX_ROUNDS) {
@@ -293,14 +292,17 @@ object DeepSeekDirect {
                         }
                         continue
                     }
-                    // 强制兜底：强动作请求第一轮就禁止纯文字（作废重试）；
-                    // 或任务型请求只描述要做没调工具 → 纠正一轮真正执行
-                    if (!forcedTool && (STRONG_RE.containsMatchIn(prompt) ||
-                            (TASK_RE.containsMatchIn(prompt) && NARRATE_RE.containsMatchIn(turn.text)))) {
-                        forcedTool = true
+                    // 强制兜底：任务型请求若只出纯文字（尤其像空谈"我要做什么"），
+                    // 整轮作废并注入强指令重试，直到出现真实工具调用，最多 3 次
+                    val textLooksNarrating = NARRATE_RE.containsMatchIn(turn.text) ||
+                            (turn.text.length > 24 && (turn.text.contains("工具") || turn.text.contains("`") ||
+                                    turn.text.contains("submit_build") || turn.text.contains("check_build") ||
+                                    turn.text.contains("exec")))
+                    if (isAction && forcedCount < 3 && (forcedCount > 0 || textLooksNarrating)) {
+                        forcedCount++
                         msgs.put(JSONObject().put("role", "assistant").put("content", turn.text))
                         msgs.put(JSONObject().put("role", "system").put("content",
-                            "你上一条只描述了要做的操作，没有真正调用工具执行。现在立即调用对应工具完成用户请求（该调几个调几个）；执行期间不输出任何旁白文字，全部完成后只给 1 句简短结论。"))
+                            "你刚才只输出文字、没有调用任何工具，但用户要的是实际执行。现在立刻调用最合适的工具完成请求（该调几个调几个）；执行期间不要输出任何旁白文字，全部完成后只给 1 句简短结论。"))
                         continue
                     }
                     if (turnBuf.isNotEmpty()) onDelta(turnBuf.toString())
