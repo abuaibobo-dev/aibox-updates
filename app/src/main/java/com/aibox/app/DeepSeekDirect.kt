@@ -25,7 +25,7 @@ object DeepSeekDirect {
 
     private const val API = "https://api.deepseek.com/chat/completions"
     private const val MODEL = "deepseek-chat"
-    private const val MAX_ROUNDS = 32
+    private const val MAX_ROUNDS = 60
     private const val TOOL_TIMEOUT_SEC = 300L
     private const val OUT_LIMIT = 16000
     private val JSON = "application/json; charset=utf-8".toMediaType()
@@ -466,7 +466,7 @@ object DeepSeekDirect {
         // 简洁回复约束：直给答案、不客套、不重复问题，除非用户要求详细
         out.put(JSONObject().put("role", "system").put("content",
             "回复规则（必须遵守）：极简。默认 1~3 句，用户明确要求详细才展开。不客套、不复述问题、不要铺垫和总结式废话、不重复已说内容。能用列表就用短列表（不超过 3 项）。" +
-            "每次执行完工具（命令）后，用 1 句重点总结（20 字以内）：只讲结果和关键信息，不重复命令内容、不说废话，然后决定下一步；不要静默连续执行多个工具。" +
+            "执行策略（必须遵守）：接到任务后一口气干到交付再停。允许连续批量执行多个工具/命令，不要在每步之间停下来总结、确认或纠结下一步；只有任务完成、遇到阻塞性错误（同一操作连续失败≥3次）、或缺少必须由用户提供的信息时才停下。整轮完成后只给 1 句 20 字以内的重点总结（结果+关键信息），不重复命令内容。" +
             "不要主动附建议/补充/提示，除非用户明确要求或确有必要（各 1 句内）。" +
             "环境：手机沙盒（无 root）。python3/wget/sh/busybox 已装；已配本地代理+国内 pip 镜像，python/curl/pip 可在线联网装库；纯 Python 库全可用。" +
             "关键：引擎目录(\$PREFIX)与工作目录持久保存，装的东西重启后仍在；所有库/工具必须装到 \$PREFIX 或工作目录，不要用临时目录。" +
