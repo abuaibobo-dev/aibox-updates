@@ -148,7 +148,7 @@ object DeepSeekDirect {
             .put("type", "function")
             .put("function", JSONObject()
                 .put("name", "submit_build")
-                .put("description", "把工作目录里写好的完整 Android 项目一键提交到云端编译成 APK（需用户已在 设置→GitHub Token 填过令牌）。App 会自动把整个项目推送到 GitHub 触发云端构建，构建完成后按约定直链下载 APK。只用于：生成/修改完整 Android 项目后要出安装包。")
+                .put("description", "把工作目录里的完整 Android 项目推送到云端仓库触发 GitHub Actions 构建（需先在 设置→GitHub Token 填令牌）。提交后必须用 check_build 轮询真实构建结果；未经 check_build 验证，禁止声称“构建成功”“APK 已生成”。只报告工具返回的真实状态。")
                 .put("parameters", JSONObject()
                     .put("type", "object")
                     .put("properties", JSONObject()
@@ -156,6 +156,19 @@ object DeepSeekDirect {
                         .put("message", JSONObject().put("type", "string").put("description", "本次提交说明，一句话描述这个项目/改动"))
                     )
                     .put("required", JSONArray().put("project_dir"))
+                )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "check_build")
+                .put("description", "查询云端 GitHub Actions 构建的真实状态（run_id 或 branch 至少填一个）。只有返回“构建成功且已发布”时才允许向用户提供 APK 直链；进行中/失败/未找到都要如实报告。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("run_id", JSONObject().put("type", "integer").put("description", "构建运行 ID（submit_build 返回里的 id）"))
+                        .put("branch", JSONObject().put("type", "string").put("description", "提交分支名（如 agent-build-...），不填 run_id 时按最新一次运行查询"))
+                    )
+                    .put("required", JSONArray())
                 )))
         .put(JSONObject()
             .put("type", "function")
@@ -486,6 +499,10 @@ object DeepSeekDirect {
                     val j = JSONObject(tc.arguments)
                     submitBuild(ctx, j.optString("project_dir"), j.optString("message"))
                 }
+                "check_build" -> {
+                    val j = JSONObject(tc.arguments)
+                    checkBuild(ctx, j.optString("branch"), j.optString("run_id"))
+                }
                 "manage_skills" -> {
                     val j = JSONObject(tc.arguments)
                     manageSkills(ctx, j.optString("action"), j.optString("name"), j.optString("prompt"))
@@ -538,7 +555,7 @@ object DeepSeekDirect {
         }
     }
 
-    /** 一键提交云端编译：把完整 Android 项目推送到 GitHub agent-builds 仓库触发 CI，返回 APK 直链约定 */
+    /** 一键提交云端编译：推送到 GitHub 并报告真实状态。只返回已验证的事实，禁止声称构建成功。 */
     private fun submitBuild(ctx: Context, projectDirRaw: String, message: String): String {
         val token = CodexEngine.ghToken(ctx)
         if (token.isBlank()) return "错误：请先在 设置 里填写并保存 GitHub Token（用于推送代码触发云端编译）"
@@ -556,13 +573,25 @@ object DeepSeekDirect {
         files.sortBy { it.absolutePath }
         if (files.isEmpty()) return "错误：项目目录里没有可提交的文件"
         val repo = "abuaibobo-dev/agent-builds"
+        // 1) 先验证 token 与仓库真实可用（404=仓库不存在，401/403=token 无效）
+        val (rc, _) = ghApiFull(repo, "", token, "GET")
+        when (rc) {
+            200 -> Unit
+            401, 403 -> return "错误：GitHub Token 无效或无权限（HTTP $rc），请到 设置→GitHub Token 重新保存"
+            404 -> return "错误：云端仓库 $repo 不存在（HTTP 404），无法提交"
+            else -> return "错误：无法连接 GitHub（HTTP $rc），请稍后重试"
+        }
+        // 2) 检查项目里是否有 GitHub Actions 构建工作流
+        val hasWorkflow = files.any {
+            it.path.replace('\\', '/').startsWith(".github/workflows/") &&
+                (it.name.endsWith(".yml") || it.name.endsWith(".yaml"))
+        }
         val branch = "agent-build-" + System.currentTimeMillis()
         val defaultRef = ghApi(repo, "git/ref/heads/main", token, "GET")
-            ?: return "错误：无法读取云端仓库，请检查 GitHub Token 是否有 repo 写权限"
+            ?: return "错误：无法读取云端仓库 main 分支（token 是否有 repo 写权限？）"
         val sha = JSONObject(defaultRef).optJSONObject("object")?.optString("sha").orEmpty()
         if (sha.isEmpty()) return "错误：无法读取云端仓库分支"
-        val refBody = JSONObject().put("ref", "refs/heads/$branch").put("sha", sha).toString()
-        ghApi(repo, "git/refs", token, "POST", refBody)
+        ghApi(repo, "git/refs", token, "POST", JSONObject().put("ref", "refs/heads/$branch").put("sha", sha).toString())
         var pushed = 0
         val commitMsg = message.ifBlank { "agent build" }
         for (f in files) {
@@ -571,15 +600,81 @@ object DeepSeekDirect {
             val body = JSONObject().put("message", commitMsg).put("content", b64).put("branch", branch).toString()
             if (ghApi(repo, "contents/$rel", token, "PUT", body) != null) pushed++
         }
-        if (pushed == 0) return "错误：文件推送失败，请检查 GitHub Token 是否有 repo 写权限"
-        return "已提交 $pushed 个文件到云端分支 $branch，云端构建已自动触发（约 3~6 分钟）。\n" +
-            "APK 直链：https://github.com/$repo/releases/download/$branch/app-debug.apk\n" +
-            "构建日志：https://github.com/$repo/actions\n" +
-            "可用 http_get 轮询 https://api.github.com/repos/$repo/releases/tags/$branch 判断是否完成（200=成功，404=构建中）。"
+        if (pushed == 0) return "错误：文件推送失败（0/${files.size}），请检查 GitHub Token 权限"
+        // 3) 提交后立刻查询真实构建运行
+        val (runCode, runBody) = ghApiFull(repo, "actions/runs?branch=$branch&per_page=1", token, "GET")
+        val run = if (runCode == 200 && runBody.isNotBlank()) {
+            runCatching {
+                val arr = JSONObject(runBody).optJSONArray("workflow_runs") ?: JSONArray()
+                if (arr.length() > 0) arr.getJSONObject(0) else null
+            }.getOrNull()
+        } else null
+        val pushedMsg = "已推送 $pushed/${files.size} 个文件到分支 $branch"
+        if (run != null) {
+            val runId = run.optLong("id")
+            val status = run.optString("status")
+            val url = run.optString("html_url")
+            if (!hasWorkflow) {
+                return "⚠️ $pushedMsg，但项目里没有 .github/workflows 构建工作流，不会生成 APK。\n" +
+                    "构建运行：id=$runId status=$status $url\n" +
+                    "如需 APK，先在工作目录创建 .github/workflows/build.yml 再重新提交。"
+            }
+            return "$pushedMsg。\n构建运行已出现：id=$runId status=$status\n$url\n" +
+                "用 check_build 轮询真实结果；验证成功前不要声称 APK 已生成。"
+        }
+        return if (hasWorkflow) {
+            "$pushedMsg，但 GitHub 尚未返回该分支的构建运行（Actions 可能未开启）。\n用 check_build(branch=$branch) 继续轮询真实状态。"
+        } else {
+            "⚠️ $pushedMsg，但项目里没有 .github/workflows 构建工作流，不会生成 APK。\n如需要 APK，先创建 .github/workflows/build.yml。"
+        }
+    }
+
+    /** 轮询云端构建真实状态：只有 run conclusion=success 且 release 真实存在才给 APK 直链 */
+    private fun checkBuild(ctx: Context, branch: String, runIdRaw: String): String {
+        val token = CodexEngine.ghToken(ctx)
+        if (token.isBlank()) return "错误：请先配置 GitHub Token"
+        val repo = "abuaibobo-dev/agent-builds"
+        val run = runIdRaw.trim().toLongOrNull()?.let { rid ->
+            val (c, b) = ghApiFull(repo, "actions/runs/$rid", token, "GET")
+            if (c == 200 && b.isNotBlank()) runCatching { JSONObject(b) }.getOrNull() else null
+        } ?: run {
+            val br = branch.trim()
+            if (br.isEmpty()) return "错误：check_build 需要 run_id 或 branch 参数"
+            val (c, b) = ghApiFull(repo, "actions/runs?branch=$br&per_page=1", token, "GET")
+            if (c == 200 && b.isNotBlank()) {
+                runCatching {
+                    val arr = JSONObject(b).optJSONArray("workflow_runs") ?: JSONArray()
+                    if (arr.length() > 0) arr.getJSONObject(0) else null
+                }.getOrNull()
+            } else null
+        }
+        if (run == null) return "查询失败：GitHub 未返回该构建（分支/run_id 不存在？）"
+        val status = run.optString("status")
+        val conclusion = run.optString("conclusion")
+        val runId = run.optLong("id")
+        val url = run.optString("html_url")
+        if (status != "completed") {
+            return "构建进行中：id=$runId status=$status\n$url\n（未完成，不要声称成功）"
+        }
+        if (conclusion != "success") {
+            return "构建失败：id=$runId conclusion=$conclusion\n$url\n（没有 APK，需修复后重新提交）"
+        }
+        // 构建成功：再验证 release 真实存在才给直链
+        val tag = run.optString("head_branch")
+        val (rc, _) = ghApiFull(repo, "releases/tags/$tag", token, "GET")
+        if (rc == 200) {
+            return "✅ 构建成功且已发布：id=$runId\nAPK 直链：https://github.com/$repo/releases/download/$tag/app-debug.apk"
+        }
+        return "构建成功：id=$runId conclusion=success，但 release 尚未出现，继续轮询 check_build。"
     }
 
     /** GitHub API 请求：成功返回响应体，失败返回 null */
     private fun ghApi(repo: String, path: String, token: String, method: String, body: String? = null): String? {
+        return ghApiFull(repo, path, token, method, body).let { (c, b) -> if (c in 200..299) b else null }
+    }
+
+    /** GitHub API 请求：返回 (HTTP 状态码, 响应体)，网络异常返回 (-1, "") */
+    private fun ghApiFull(repo: String, path: String, token: String, method: String, body: String? = null): Pair<Int, String> {
         val url = "https://api.github.com/repos/$repo/$path"
         val b = Request.Builder().url(url)
             .header("Authorization", "Bearer $token")
@@ -591,8 +686,8 @@ object DeepSeekDirect {
             else -> b.get()
         }.build()
         return try {
-            client.newCall(req).execute().use { resp -> if (resp.code in 200..299) resp.body?.string() else null }
-        } catch (_: Exception) { null }
+            client.newCall(req).execute().use { resp -> resp.code to (resp.body?.string().orEmpty()) }
+        } catch (_: Exception) { -1 to "" }
     }
 
     /** Shizuku/ADB 级命令执行：需要用户在设置里启动并授权 Shizuku */
@@ -837,7 +932,7 @@ object DeepSeekDirect {
         // 简洁回复约束：直给答案、不客套、不重复问题，除非用户要求详细
         out.put(JSONObject().put("role", "system").put("content",
             "回复规则（必须遵守）：像 Codex 一样回复——先给结论，再给要点（每行一条，最多 3 条）。极简，默认 1~3 句，用户明确要求详细才展开。不客套、不复述问题、不要铺垫和总结式废话、不重复已说内容。" +
-            "执行策略（必须遵守）：接到任务后一口气干到交付再停。允许连续批量执行多个工具/命令，不要在每步之间停下来总结、确认或纠结下一步；只有任务完成、遇到阻塞性错误（同一操作连续失败≥3次）、或缺少必须由用户提供的信息时才停下。整轮完成后只给 1 句 20 字以内的重点总结（结果+关键信息），不重复命令内容。" + "计划规则：多步任务开始执行前必须先调用 set_plan 声明 2~5 步计划（每步不超过15字），执行中每完成一步立即调用 plan_step 标记，全部完成调用 plan_done；文字回复里不要再重复计划内容，只需在最后给总结。单步任务不要调用这些工具。" +
+            "执行策略（必须遵守）：接到任务后一口气干到交付再停。允许连续批量执行多个工具/命令，不要在每步之间停下来总结、确认或纠结下一步；只有任务完成、遇到阻塞性错误（同一操作连续失败≥3次）、或缺少必须由用户提供的信息时才停下。整轮完成后只给 1 句 20 字以内的重点总结（结果+关键信息），不重复命令内容。" + "诚实规则（必须遵守）：一切结论必须以工具返回的真实结果为准，禁止编造、猜测或美化。文件/项目/命令结果存在与否，先调用工具验证再说话；提交构建后，未经 check_build 验证成功并拿到真实 APK 直链，禁止声称“构建成功”“APK 已生成”“编译中”；工具没有返回证据时如实说“尚未验证/待确认”，绝不用编造的结果充数交差。" + "计划规则：多步任务开始执行前必须先调用 set_plan 声明 2~5 步计划（每步不超过15字），执行中每完成一步立即调用 plan_step 标记，全部完成调用 plan_done；文字回复里不要再重复计划内容，只需在最后给总结。单步任务不要调用这些工具。" +
             "不要主动附建议/补充/提示，除非用户明确要求或确有必要（各 1 句内）。" +
             "环境：手机沙盒（无 root）。python3/wget/sh/busybox 已装；已配本地代理+国内 pip 镜像，python/curl/pip 可在线联网装库；纯 Python 库全可用。" +
             "关键：引擎目录(\$PREFIX)与工作目录持久保存，装的东西重启后仍在；所有库/工具必须装到 \$PREFIX 或工作目录，不要用临时目录。" +
