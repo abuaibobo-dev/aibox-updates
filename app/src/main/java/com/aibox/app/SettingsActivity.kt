@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import rikka.shizuku.Shizuku
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -44,6 +45,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var btnToolchain: Button
     private lateinit var btnExportLog: Button
     private lateinit var etGhToken: EditText
+    private lateinit var tvShizukuStatus: TextView
+    private lateinit var btnShizuku: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppCompatDelegate.setDefaultNightMode(getSharedPreferences("theme", MODE_PRIVATE).getInt("mode", AppCompatDelegate.MODE_NIGHT_NO))
@@ -260,6 +263,24 @@ class SettingsActivity : AppCompatActivity() {
 
         etGhToken = findViewById(R.id.etGhToken)
         etGhToken.setText(CodexEngine.ghToken(this))
+
+        tvShizukuStatus = findViewById(R.id.tvShizukuStatus)
+        btnShizuku = findViewById(R.id.btnShizuku)
+        Shizuku.addRequestPermissionResultListener { requestCode, _ ->
+            if (requestCode == SHIZUKU_REQ) refreshShizuku()
+        }
+        btnShizuku.setOnClickListener {
+            if (!Shizuku.pingBinder()) {
+                Toast.makeText(this, "请先启动 Shizuku（root 直接启动；无 root 用 adb 或无线调试启动）", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Shizuku 已授权", Toast.LENGTH_SHORT).show()
+            } else {
+                Shizuku.requestPermission(SHIZUKU_REQ)
+            }
+        }
+        refreshShizuku()
         findViewById<android.widget.Button>(R.id.btnSaveGh).setOnClickListener {
             val t = etGhToken.text.toString().trim()
             if (t.isBlank()) {
@@ -398,6 +419,7 @@ class SettingsActivity : AppCompatActivity() {
         super.onResume()
         refreshSandboxStatus()
         refreshBatteryLabel()
+        refreshShizuku()
         // 引擎能力全开：仅首次进入设置页请求一次全部权限（避免每次进设置都弹窗干扰操作）
         val sp = getSharedPreferences("settings", MODE_PRIVATE)
         if (!sp.getBoolean("settings_asked_perms", false)) {
@@ -425,6 +447,21 @@ class SettingsActivity : AppCompatActivity() {
             AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM -> "跟随系统"
             else -> "深色"
         }
+    }
+
+    private fun refreshShizuku() {
+        val tv = tvShizukuStatus ?: return
+        if (!Shizuku.pingBinder()) {
+            tv.text = "未运行：请先启动 Shizuku（root 或 adb/无线调试）"
+        } else if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+            tv.text = "✅ 已授权：引擎可用 shizuku_cmd 执行 ADB 级命令"
+        } else {
+            tv.text = "运行中，未授权：点下方按钮弹出授权"
+        }
+    }
+
+    companion object {
+        private const val SHIZUKU_REQ = 1000
     }
 
     private fun refreshEngine() {

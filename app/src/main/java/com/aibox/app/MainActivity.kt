@@ -569,6 +569,7 @@ class MainActivity : AppCompatActivity() {
                             "web_search" -> "🌐 联网搜索"
                             "download_file" -> "⬇️ 下载文件"
                             "http_get" -> "🌐 请求网页"
+                            "shizuku_cmd" -> "🛡 提权命令"
                             else -> "🛠 $name"
                         }
                         appendToolMsg("⏳ $label 执行中…")
@@ -584,6 +585,7 @@ class MainActivity : AppCompatActivity() {
                             "web_search" -> "🌐 联网搜索"
                             "download_file" -> "⬇️ 下载文件"
                             "http_get" -> "🌐 请求网页"
+                            "shizuku_cmd" -> "🛡 提权命令"
                             else -> "🛠 $name"
                         }
                         finishToolMsg("$label：$brief")

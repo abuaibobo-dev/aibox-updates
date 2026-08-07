@@ -74,6 +74,13 @@
         <activity android:name=".ClipboardActivity" />
         <activity android:name=".SysInfoActivity" />
         <activity android:name=".KeysActivity" />
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
         <activity android:name=".EngineActivity" android:launchMode="singleTop" />
         <activity android:name=".SettingsActivity" />
         <activity android:name=".ToolsActivity" />

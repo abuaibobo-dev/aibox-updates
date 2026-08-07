@@ -171,6 +171,18 @@ object DeepSeekDirect {
                     )
                     .put("required", JSONArray().put("action"))
                 )))
+        .put(JSONObject()
+            .put("type", "function")
+            .put("function", JSONObject()
+                .put("name", "shizuku_cmd")
+                .put("description", "以 Shizuku/ADB 级权限执行一条系统命令（需用户在 设置→Shizuku 提权 里启动并授权）。适合 pm install 安装 APK、appops 授权、查看系统属性等。不是 root，无法改 seccomp 或写系统目录。")
+                .put("parameters", JSONObject()
+                    .put("type", "object")
+                    .put("properties", JSONObject()
+                        .put("cmd", JSONObject().put("type", "string").put("description", "要执行的系统命令，如 pm list packages -3"))
+                    )
+                    .put("required", JSONArray().put("cmd"))
+                )))
 
     /** 带工具循环的对话入口 */
     fun chatWithTools(ctx: Context, history: List<Pair<String, String>>, prompt: String, key: String,
@@ -439,6 +451,10 @@ object DeepSeekDirect {
                     val j = JSONObject(tc.arguments)
                     manageSkills(ctx, j.optString("action"), j.optString("name"), j.optString("prompt"))
                 }
+                "shizuku_cmd" -> {
+                    val j = JSONObject(tc.arguments)
+                    shizukuCmd(j.optString("cmd"))
+                }
                 else -> "错误：未知工具 ${tc.name}"
             }
         } catch (e: Exception) {
@@ -526,6 +542,44 @@ object DeepSeekDirect {
         return try {
             client.newCall(req).execute().use { resp -> if (resp.code in 200..299) resp.body?.string() else null }
         } catch (_: Exception) { null }
+    }
+
+    /** Shizuku/ADB 级命令执行：需要用户在设置里启动并授权 Shizuku */
+    private fun shizukuCmd(cmd: String): String {
+        if (cmd.isBlank()) return "错误：cmd 不能为空"
+        if (!rikka.shizuku.Shizuku.pingBinder()) {
+            return "错误：Shizuku 未运行，请先启动 Shizuku（root 直接启动，无 root 用 adb/无线调试启动）"
+        }
+        if (rikka.shizuku.Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return "错误：未授权，请到 设置→Shizuku 提权 点击授权"
+        }
+        return try {
+            val binder = rikka.shizuku.Shizuku.getBinder()
+                ?: return "错误：Shizuku 服务不可用（binder 为空），请回设置页重新授权"
+            val svc = moe.shizuku.server.IShizukuService.Stub.asInterface(binder)
+            val proc = svc.newProcess(arrayOf("sh", "-c", cmd + " 2>&1"), null, null)
+            val out = StringBuilder()
+            proc.inputStream?.let { pfd ->
+                val r = java.io.BufferedReader(
+                    java.io.InputStreamReader(android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd))
+                )
+                Thread {
+                    try {
+                        var line = r.readLine()
+                        while (line != null) { out.append(line).append('\n'); line = r.readLine() }
+                    } catch (_: Exception) { } finally { try { r.close() } catch (_: Exception) { } }
+                }.start()
+            }
+            val done = proc.waitForTimeout(TOOL_TIMEOUT_SEC * 1000L, "synaps")
+            if (!done) { try { proc.destroy() } catch (_: Exception) { } }
+            Thread.sleep(150)
+            val text = out.toString().trim()
+            val code = if (done) proc.exitValue() else -1
+            if (text.isEmpty()) "(Shizuku 执行完成，无输出) 退出码 $code"
+            else text.take(OUT_LIMIT) + (if (text.length > OUT_LIMIT) "\n…(输出已截断)" else "")
+        } catch (e: Exception) {
+            "Shizuku 执行失败：${e.javaClass.simpleName} ${e.message ?: ""}"
+        }
     }
 
     /** DuckDuckGo HTML 搜索：解析前 5 条结果的标题/链接/摘要 */
@@ -628,7 +682,8 @@ object DeepSeekDirect {
             "破解路线：从 Termux 官方源 packages.termux.dev/apt/termux-main/pool/main/ 用 download_file 下载 bionic(Android 原生) 版 .deb 解压到 \$PREFIX/bionic/ 使用——bionic 动态二进制不受 seccomp 限制，numpy/pillow/jq/ffmpeg 都能跑；依赖（libc++/libopenblas/libjpeg 等）同样从该源下载。pip 装大库可直接在线装（已配清华镜像），也可 download_file 下 wheel。" +
             "文件读写支持绝对路径（/sdcard 需用户在系统设置授权所有文件访问）或相对工作目录。命令失败不重复超 3 次，连续失败改用 read_file/write_file 排查或直接说明。" +
             "打包能力：完整 Android 项目写好后（必须含 settings.gradle、根 build.gradle、app/build.gradle、AndroidManifest.xml、res、源码，确保可独立编译），调用 submit_build 提交（project_dir 传项目根目录），App 自动推送云端编译；云端环境 JDK17 + Gradle8.9 + compileSdk 34。提交成功会返回分支名，APK 直链格式固定为 https://github.com/abuaibobo-dev/agent-builds/releases/download/<分支名>/app-debug.apk，云端构建约 3~6 分钟，可用 http_get 访问 https://api.github.com/repos/abuaibobo-dev/agent-builds/releases/tags/<分支名> 轮询是否完成（200=完成，404=还没好）。" +
-            "技能管理：用 manage_skills 查看/新增/更新/删除技能，技能会实时出现在 App 的技能按钮面板，用户选中后你的技能指令会被注入到该轮对话开头；可以主动把常用工作流注册成技能。"))
+            "技能管理：用 manage_skills 查看/新增/更新/删除技能，技能会实时出现在 App 的技能按钮面板，用户选中后你的技能指令会被注入到该轮对话开头；可以主动把常用工作流注册成技能。" +
+            "提权命令：shizuku_cmd 以 ADB 权限执行系统命令（需用户在 设置→Shizuku 提权 启动并授权），可 pm install 装 APK、appops 授权、查看系统属性；Shizuku 不是 root，装不了系统级二进制、改不了 seccomp。"))
         fun append(role: String, content: String) {
             if (content.isBlank()) return
             val c = content.trim()

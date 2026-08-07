@@ -155,6 +155,32 @@
                 android:text="保存 GitHub Token"
                 android:textColor="@color/text_secondary"
                 android:background="@drawable/bg_btn_outline"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Shizuku 提权（ADB 级权限）"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"/>
+
+            <TextView
+                android:id="@+id/tvShizukuStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="检测中…"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"/>
+
+            <Button
+                android:id="@+id/btnShizuku"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="10dp"
+                android:text="启动/授权 Shizuku"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/bg_btn_outline"/>
         </LinearLayout>
 
         <!-- 账户 -->
