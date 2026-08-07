@@ -947,15 +947,20 @@ object CodexEngine {
                 "thread.started" -> EngineEvent("thread", threadId = j.optString("thread_id").ifEmpty { null })
                 "item.completed" -> {
                     val item = j.optJSONObject("item") ?: return null
+            // 安全取值：JSON null / 缺失 → 空串，避免 org.json optString 把 null 渲染成 "null" 文本
+            fun txt(o: JSONObject, k: String): String {
+                val v = o.opt(k)
+                return if (v == null || v == JSONObject.NULL) "" else o.optString(k).trim()
+            }
                     when (item.optString("type")) {
-                        "agent_message" -> EngineEvent("text", item.optString("text"))
-                        "agent_reasoning" -> EngineEvent("reasoning", item.optString("text"))
+                        "agent_message" -> EngineEvent("text", txt(item, "text"))
+                        "agent_reasoning" -> EngineEvent("reasoning", txt(item, "text"))
                         "command_execution" -> EngineEvent("tool", item.optString("command").take(140))
                         else -> null
                     }
                 }
                 "turn.completed" -> EngineEvent("turn_done")
-                "error" -> EngineEvent("error", j.optString("message"))
+                "error" -> EngineEvent("error", txt(j, "message"))
                 "turn.failed" -> EngineEvent("error", j.optJSONObject("error")?.optString("message") ?: "回合失败")
                 else -> null
             }
