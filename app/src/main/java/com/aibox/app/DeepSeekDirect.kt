@@ -265,7 +265,7 @@ object DeepSeekDirect {
                 while (true) {
                     round++
                     if (round > MAX_ROUNDS) {
-                        onError("已达工具循环上限($MAX_ROUNDS轮)，任务未收敛。请拆分指令后重试")
+                        onError("已达工具循环上限(${MAX_ROUNDS}轮)，任务未收敛。请拆分指令后重试")
                         return@Thread
                     }
                     // 缓冲本轮文字：工具轮里的旁白（"我先查看/正在下载"）直接丢弃，
