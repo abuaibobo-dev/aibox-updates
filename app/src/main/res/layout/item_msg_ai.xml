@@ -6,19 +6,36 @@
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
-    <TextView
-        android:id="@+id/tvStatus"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="4dp"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp"
-        android:visibility="gone"/>
+        android:orientation="horizontal"
+        android:gravity="start|center_vertical"
+        android:maxWidth="560dp"
+        android:layout_marginBottom="4dp">
+
+        <ProgressBar
+            android:id="@+id/tvThinking"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="6dp"
+            android:indeterminateTint="@color/accent_amber"
+            android:visibility="gone"/>
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone"/>
+    </LinearLayout>
 
     <TextView
         android:id="@+id/tvBody"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:maxWidth="560dp"
         android:textColor="@color/text_primary"
         android:textSize="15sp"
         android:lineSpacingExtra="4dp"

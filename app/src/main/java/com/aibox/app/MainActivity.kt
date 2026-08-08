@@ -74,8 +74,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var layWelcome: LinearLayout
     private lateinit var attachScroll: HorizontalScrollView
     private lateinit var attachBar: LinearLayout
-    private lateinit var toolScroll: HorizontalScrollView
-    private lateinit var toolBar: LinearLayout
     private lateinit var btnAttach: ImageButton
     private lateinit var btnOcr: ImageButton
     private lateinit var btnModel: TextView
@@ -84,8 +82,6 @@ class MainActivity : AppCompatActivity() {
     /** 识图取字：选图 → ML Kit OCR → 文字进输入框（onCreate 里初始化，避免构造阶段注册失败） */
     private var ocrPicker: androidx.activity.result.ActivityResultLauncher<androidx.activity.result.PickVisualMediaRequest>? = null
     private var currentSkill: String? = null
-    /** 工具条：最近执行的命令/操作，点击回填输入框（最多 8 条，去重） */
-    private val recentTools = java.util.LinkedList<String>()
     // 流式回复 UI 节流：累积 delta，主线程合并刷新，避免每字符一次 notifyItemChanged 卡死
     private var pendingDelta = StringBuilder()
     private var deltaRefreshQueued = false
@@ -219,8 +215,6 @@ class MainActivity : AppCompatActivity() {
         layWelcome = findViewById(R.id.layWelcome)
         attachScroll = findViewById(R.id.attachScroll)
         attachBar = findViewById(R.id.attachBar)
-        toolScroll = findViewById(R.id.toolScroll)
-        toolBar = findViewById(R.id.toolBar)
         val layInputBox = findViewById<LinearLayout>(R.id.layInputBox)
         etInput.setOnFocusChangeListener { _, has ->
             layInputBox.setBackgroundResource(if (has) R.drawable.bg_input_codex_focus else R.drawable.bg_input_codex)
@@ -765,33 +759,30 @@ class MainActivity : AppCompatActivity() {
     private fun showUserMenu(pos: Int) {
         val msg = messages[pos].content
         if (msg.isBlank()) return
-        Ui.menu(this, "消息操作", listOf("复制", "引用")) { which ->
+        Ui.menu(this, "消息操作", listOf("复制")) { which ->
             when (which) {
                 0 -> (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("user", msg))
-                1 -> showQuote(messages[pos])
             }
         }
     }
 
     private fun showQuote(m: ChatMsg) {
+        // 引用工具条已移除：不再展示引用条，避免输入框上方出现残留行
         quoteMsg = m
-        findViewById<TextView>(R.id.tvQuote).text = "引用 ${if (m.role == "user") "你" else "AI"}：${m.content.take(40)}"
-        findViewById<View>(R.id.quoteBar).visibility = View.VISIBLE
     }
 
     private fun showAiMenu(pos: Int) {
         val msg = messages[pos].content
         if (msg.isBlank()) return
         val userText = (pos - 1 downTo 0).firstOrNull { messages[it].role == "user" }?.let { messages[it].content } ?: ""
-        val options = mutableListOf("复制", "引用", "朗读")
+        val options = mutableListOf("复制", "朗读")
         if (userText.isNotBlank()) options.add(0, "重新生成")
         Ui.menu(this, "消息操作", options) { which ->
             when (options[which]) {
                 "复制" -> (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("ai", msg))
-                "引用" -> showQuote(messages[pos])
-                "朗读" -> speak(msg)
+                                "朗读" -> speak(msg)
                 "重新生成" -> {
                     etInput.setText(userText)
                     send()
@@ -1056,66 +1047,8 @@ class MainActivity : AppCompatActivity() {
         autoScrollBottom()
     }
 
-    /** 工具条：收集最近执行的命令/操作（去重，最多 8 条），随后刷新 chip 行 */
-    private fun addRecentTool(raw: String) {
-        val t = raw.replace(Regex("\\s+"), " ").trim()
-        if (t.isBlank()) return
-        recentTools.remove(t)
-        recentTools.addFirst(t)
-        while (recentTools.size > 8) recentTools.removeLast()
-        main.post { renderToolBar() }
-    }
-
-    /** 渲染输入框上方的工具条：清空按钮 + 最近操作 chip，点击回填输入框 */
-    private fun renderToolBar() {
-        toolBar.removeAllViews()
-        if (recentTools.isEmpty()) {
-            toolScroll.visibility = View.GONE
-            return
-        }
-        toolScroll.visibility = View.VISIBLE
-        val ctx = this
-        val clearBtn = TextView(ctx).apply {
-            text = "✕ 清空"
-            textSize = 12f
-            setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary))
-            background = ContextCompat.getDrawable(ctx, R.drawable.bg_chip_codex)
-            gravity = Gravity.CENTER
-            setPadding(28, 10, 28, 10)
-        }
-        clearBtn.setOnClickListener {
-            recentTools.clear()
-            renderToolBar()
-        }
-        toolBar.addView(clearBtn)
-        for (t in recentTools) {
-            val chip = TextView(ctx).apply {
-                text = t.take(44)
-                textSize = 12f
-                maxLines = 1
-                setTextColor(ContextCompat.getColor(ctx, R.color.chip_codex_text))
-                background = ContextCompat.getDrawable(ctx, R.drawable.bg_chip_codex)
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(30, 10, 30, 10)
-            }
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT)
-            lp.setMargins(6, 0, 0, 0)
-            chip.layoutParams = lp
-            chip.setOnClickListener {
-                etInput.setText(t)
-                etInput.setSelection(t.length)
-                etInput.requestFocus()
-            }
-            chip.setOnLongClickListener {
-                recentTools.remove(t)
-                renderToolBar()
-                true
-            }
-            toolBar.addView(chip)
-        }
-    }
+    /** 工具条已移除（不再收集/渲染最近操作 chip） */
+    private fun addRecentTool(raw: String) { }
 
     /** 上次启动发生过崩溃时，进主页面弹一次提示，方便拿到堆栈而不是瞎猜 */
     /** 状态栏图标深浅随主题（代码方式，兼容 API 24+，避免资源引用在部分机型上解析失败） */
