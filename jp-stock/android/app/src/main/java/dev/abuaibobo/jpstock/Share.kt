@@ -3,6 +3,7 @@ package dev.abuaibobo.jpstock
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -86,5 +87,11 @@ fun ShareRow(p: Pick, context: Context) {
                 }
             }
         }
+        Spacer(Modifier.height(4.dp))
+        Button(onClick = {
+            val uri = generateAdviseCard(context, p)
+            if (uri != null) shareImageUri(context, uri)
+            else Toast.makeText(context, "生成图片卡失败", Toast.LENGTH_SHORT).show()
+        }) { Text("生成图片卡 · 发给客户(LINE等)", fontSize = 13.sp) }
     }
 }
