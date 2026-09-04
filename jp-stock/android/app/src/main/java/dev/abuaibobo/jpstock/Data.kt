@@ -137,6 +137,24 @@ object Api {
         MarketFeed(obj.optString("date"), indices, sectors)
     }
 
+    /** Real-time indices from local backend; null when backend unreachable. */
+    suspend fun fetchLiveIndices(): List<IndexQuote>? = withContext(Dispatchers.IO) {
+        try {
+            val o = JSONObject(getText("$ANALYSIS_BASE/market"))
+            val ivals = o.getJSONArray("indices")
+            (0 until ivals.length()).map { i ->
+                val x = ivals.getJSONObject(i)
+                IndexQuote(
+                    key = x.optString("key"), name = x.optString("name"),
+                    last = x.optDouble("last", 0.0),
+                    chgDay = nullable(x, "chg_day"), chg5d = nullable(x, "chg_5d"),
+                )
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     suspend fun fetchHistory(): HistoryFeed = withContext(Dispatchers.IO) {
         val obj = JSONObject(getText("$GITHUB_RAW/history.json"))
         val darr = obj.getJSONArray("days")

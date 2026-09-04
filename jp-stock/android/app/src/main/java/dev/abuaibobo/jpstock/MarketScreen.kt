@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun MarketScreen() {
     var feed by remember { mutableStateOf<MarketFeed?>(null) }
+    var liveIndices by remember { mutableStateOf<List<IndexQuote>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
@@ -24,6 +25,8 @@ fun MarketScreen() {
             loading = true; error = null
             try { feed = Api.fetchMarket() }
             catch (e: Exception) { error = e.message ?: "加载失败" }
+            // best-effort live indices from local backend (fast fail if absent)
+            liveIndices = try { Api.fetchLiveIndices() } catch (_: Exception) { null }
             loading = false
         }
     }
@@ -38,11 +41,15 @@ fun MarketScreen() {
         ) {
             item {
                 Text("日本股市 大盘概览", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("数据日期: ${feed!!.date}", fontSize = 12.sp, color = FlatGray)
+                val live = liveIndices != null
+                Text(if (live) "指数实时 · 板块日级 (${feed!!.date})"
+                    else "数据日期: ${feed!!.date} (指数为日级)",
+                    fontSize = 12.sp, color = FlatGray)
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    feed!!.indices.forEach { IndexCard(it, Modifier.weight(1f)) }
+                    val shown = liveIndices ?: feed!!.indices
+                    shown.forEach { IndexCard(it, Modifier.weight(1f)) }
                 }
             }
             item {

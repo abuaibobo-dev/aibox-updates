@@ -22,6 +22,7 @@ import fetch_hist_fund as fhf  # noqa: F401  (DB path helpers)
 import ai_explain
 import scoring as sc
 import export_daily as ed
+import fetch_market as fm
 
 
 def _yahoo_price(code):
@@ -252,6 +253,23 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, {"error": str(e)})
             except Exception as e:
                 self._send(500, {"error": f"{type(e).__name__}: {e}"})
+            return
+        if parsed.path == "/market":
+            indices = []
+            for ix in fm.INDICES:
+                try:
+                    snap = fm.index_snapshot(ix["symbol"])
+                    if snap:
+                        snap["key"] = ix["key"]
+                        snap["name"] = ix["name"]
+                        indices.append(snap)
+                except Exception:
+                    pass
+            self._send(200, {
+                "date": time.strftime("%Y-%m-%d"),
+                "generated": time.strftime("%H:%M:%S UTC"),
+                "indices": indices,
+            })
             return
         self._send(404, {"error": "not found"})
 
