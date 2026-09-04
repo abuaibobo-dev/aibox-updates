@@ -138,7 +138,7 @@ def main():
         dy = fd.get("div_yield")
         lines.append(f"#{i}  {code}  {name}")
         lines.append(f"    行业: {s['industry']}  现价: ¥{s.get('price','?'):,}  "
-                     f"综合分: {s['blend']:.1f} (技术{s['score']:.0f}/基本面{s['fund']:.0f})")
+                     f"综合分: {s['blend']:.1f} (价值质量{s.get('vq',0):.0f}/技术{s['score']:.0f})")
         detail = []
         if per:
             detail.append(f"PE {per:.1f}")

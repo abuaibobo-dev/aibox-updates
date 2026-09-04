@@ -67,7 +67,7 @@ def main():
             "price": s.get("price"),
             "score": s["blend"],
             "tech": s["score"],
-            "fund": s["fund"],
+            "fund": s.get("vq"),
             "per": fd.get("per_f") or fd.get("per"),
             "pbr": fd.get("pbr"),
             "roe": fd.get("roe") or fd.get("roe_f"),

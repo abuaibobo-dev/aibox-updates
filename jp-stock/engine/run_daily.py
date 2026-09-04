@@ -35,12 +35,27 @@ def main():
     run([sys.executable, "fetch_universe.py"])
     run([sys.executable, "fetch_prices.py"])
 
-    # candidates = top ~120 by technical score (fundamentals only for these)
+    # candidates for live fundamentals: technical-eligible top ~300.
+    # (rank_all needs fundamentals, so select purely on the technical gate.)
     sys.path.insert(0, str(ENGINE))
+    import fetch_prices as fp
     import scoring as sc
-    ranked = sc.rank_all()
-    cands = [c for c, _, _ in ranked[:120]]
-    print(f"top candidates for fundamentals: {len(cands)}", file=sys.stderr)
+    conn = fp.db_conn()
+    codes = [r[0] for r in conn.execute("SELECT code FROM stocks ORDER BY code")]
+    conn.close()
+    tech = []
+    for code in codes:
+        got = sc.load_closes(code)
+        if not got:
+            continue
+        closes, volume = got
+        s = sc.score_stock(closes, volume)
+        if s:
+            tech.append((code, s["score"]))
+    tech.sort(key=lambda x: -x[1])
+    cands = [c for c, _ in tech[:300]]
+    print(f"tech-eligible={len(tech)} fetching live fundamentals for top {len(cands)}",
+          file=sys.stderr)
     if cands:
         run([sys.executable, "fetch_fundamentals.py"] + cands)
     run([sys.executable, "export_daily.py"])
