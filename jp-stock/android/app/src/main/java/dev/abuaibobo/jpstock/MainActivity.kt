@@ -9,6 +9,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,7 +31,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Api.setAnalysisBase(loadSavedBase(this))
         setContent {
-            MaterialTheme(colorScheme = DarkColorScheme) {
+            MaterialTheme(colorScheme = DarkColorScheme, shapes = JPShapes) {
                 AppRoot()
             }
         }
@@ -49,31 +55,31 @@ fun AppRoot() {
                 NavigationBarItem(
                     selected = tab == 0,
                     onClick = { tab = 0 },
-                    icon = {},
+                    icon = { Icon(Icons.Filled.Star, contentDescription = null) },
                     label = { Text("推荐") },
                 )
                 NavigationBarItem(
                     selected = tab == 1,
                     onClick = { tab = 1 },
-                    icon = {},
+                    icon = { Icon(Icons.Filled.TrendingUp, contentDescription = null) },
                     label = { Text("行情") },
                 )
                 NavigationBarItem(
                     selected = tab == 2,
                     onClick = { tab = 2 },
-                    icon = {},
+                    icon = { Icon(Icons.Filled.History, contentDescription = null) },
                     label = { Text("跟踪") },
                 )
                 NavigationBarItem(
                     selected = tab == 3,
                     onClick = { tab = 3 },
-                    icon = {},
+                    icon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     label = { Text("解析") },
                 )
                 NavigationBarItem(
                     selected = tab == 4,
                     onClick = { tab = 4 },
-                    icon = {},
+                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                     label = { Text("设置") },
                 )
             }

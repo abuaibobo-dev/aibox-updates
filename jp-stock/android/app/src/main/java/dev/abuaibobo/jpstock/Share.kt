@@ -66,8 +66,7 @@ fun ShareRow(p: Pick, context: Context) {
     val clipboard = LocalClipboardManager.current
     Column(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically) {

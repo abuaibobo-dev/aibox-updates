@@ -1,34 +1,53 @@
 package dev.abuaibobo.jpstock
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Shapes
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
-// JP market convention: red = up, blue = down. Deep "trading terminal" theme.
-val UpRed = Color(0xFFE5484D)
-val DownBlue = Color(0xFF3B9EFF)
-val FlatGray = Color(0xFF8B949E)
+// Monochrome base (near-black / gray scale). Colour is reserved for numbers
+// and emphasis only, so the UI reads clean and the figures pop.
 
-val BgDark = Color(0xFF0D1117)
-val CardDark = Color(0xFF161B22)
-val BorderDark = Color(0xFF21262D)
-val TextPrimary = Color(0xFFE6EDF3)
-val TextSecondary = Color(0xFF8B949E)
-val AccentBlue = Color(0xFF58A6FF)
-val AccentGold = Color(0xFFD29922)
-val AccentPurple = Color(0xFFBC8CFF)
+// Market up/down colours (numbers & candles)
+val UpRed = Color(0xFFFF5A5F)     // up
+val DownBlue = Color(0xFF41A0FF)  // down
 
-// Material3 dark scheme for the whole app
+// Grayscale surfaces / text
+val BgDark = Color(0xFF0A0B0D)
+val CardDark = Color(0xFF141619)
+val BorderDark = Color(0xFF23262B)
+val TextPrimary = Color(0xFFF0F2F4)
+val TextSecondary = Color(0xFF9AA1A8)
+
+// Single accent for interactive / anchor text and highlights
+val AccentBlue = Color(0xFF63A8FF)
+val AccentGold = Color(0xFFD9B24A)   // kept small (e.g. tags) — minimal use
+val AccentPurple = Color(0xFFA78BFA)
+
+// Rounded corners for cards, dialogs, sheets, text fields
+val JPShapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(18.dp),
+    extraLarge = RoundedCornerShape(24.dp),
+)
+
+// Material3 scheme for the whole app
 val DarkColorScheme = androidx.compose.material3.darkColorScheme(
     primary = AccentBlue,
-    secondary = AccentPurple,
+    secondary = TextSecondary,
     tertiary = AccentGold,
     background = BgDark,
     surface = CardDark,
     surfaceVariant = BorderDark,
-    onPrimary = Color(0xFF0D1117),
-    onSecondary = Color(0xFF0D1117),
-    onTertiary = Color(0xFF0D1117),
+    surfaceContainerHighest = Color(0xFF1B1E23),
+    onPrimary = Color(0xFF06121F),
+    onSecondary = Color(0xFF0B0D10),
+    onTertiary = Color(0xFF0B0D10),
     onBackground = TextPrimary,
     onSurface = TextPrimary,
     onSurfaceVariant = TextSecondary,
+    outline = BorderDark,
     error = UpRed,
 )
