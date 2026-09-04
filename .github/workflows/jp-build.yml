@@ -1,0 +1,32 @@
+name: JPStock Build APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'jp-stock/android/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build debug APK
+        working-directory: jp-stock/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jpstock-apk
+          path: jp-stock/android/app/build/outputs/apk/debug/app-debug.apk
