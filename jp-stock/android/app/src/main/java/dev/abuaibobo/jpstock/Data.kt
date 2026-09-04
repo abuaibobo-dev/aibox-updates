@@ -23,6 +23,7 @@ data class Pick(
     val reasonJa: String = "",
     val aiReason: String = "",
     val tags: List<String> = emptyList(),
+    val pitch: String = "",
 )
 
 data class DailyFeed(val strategy: String, val picks: List<Pick>)
@@ -121,6 +122,7 @@ object Api {
                 reasonJa = p.optString("reason_ja"),
                 aiReason = p.optString("ai_reason"),
                 tags = tags,
+                pitch = p.optString("pitch"),
             )
         }
         DailyFeed(obj.optString("strategy"), picks)

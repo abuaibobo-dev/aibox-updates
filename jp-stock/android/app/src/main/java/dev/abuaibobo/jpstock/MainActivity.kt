@@ -155,9 +155,13 @@ fun PickCard(p: Pick, onClick: () -> Unit) {
             }
             Text(chips.joinToString("  ·  "), fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
-            Text(p.reason, fontSize = 13.sp, color = TextSecondary)
+            if (p.pitch.isNotBlank()) {
+                Text(p.pitch, fontSize = 13.sp, lineHeight = 19.sp)
+            } else {
+                Text(p.reason, fontSize = 13.sp, color = TextSecondary)
+            }
             Spacer(Modifier.height(4.dp))
-            Text("点按查看走势 →", fontSize = 12.sp, color = AccentBlue)
+            Text("点按查看K线/指标/解读 →", fontSize = 12.sp, color = AccentBlue)
         }
     }
 }

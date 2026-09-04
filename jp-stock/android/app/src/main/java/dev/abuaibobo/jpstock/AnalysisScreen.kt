@@ -79,9 +79,19 @@ fun AnalysisResultView(a: AnalysisData) {
         Spacer(Modifier.height(8.dp))
 
         if (a.candles.isNotEmpty()) {
-            Text("近3个月日K · 红涨蓝跌", fontSize = 12.sp, color = FlatGray)
+            Text("近3个月日K · 红涨蓝跌 · 蓝虚线=支撑 红虚线=压力",
+                fontSize = 12.sp, color = FlatGray)
             val kl = a.candles.map { KLine(it.ts, it.open, it.high, it.low, it.close, 0) }
-            CandlestickChart(kl, Modifier.fillMaxWidth().height(200.dp))
+            val (sup, res) = findKeyLevels(
+                a.candles.map { it.high }, a.candles.map { it.low }, a.price)
+            CandlestickChart(kl, Modifier.fillMaxWidth().height(240.dp),
+                supports = sup, resistances = res)
+            if (sup.isNotEmpty() || res.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text("支撑: ${sup.joinToString { "¥" + fmt(it) }}"
+                    + if (res.isNotEmpty()) "    压力: ${res.joinToString { "¥" + fmt(it) }}" else "",
+                    fontSize = 13.sp, color = FlatGray)
+            }
             Spacer(Modifier.height(8.dp))
         }
 

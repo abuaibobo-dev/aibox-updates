@@ -7,8 +7,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import android.graphics.Paint
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -16,17 +20,65 @@ private val UpColor = Color(0xFFE53935)      // JP convention: red = up
 private val DownColor = Color(0xFF1E88E5)    // blue = down
 
 /**
+ * Find support/resistance from swing highs/lows (window k), clustering prices
+ * that are within ~1% so nearby pivots merge into one level. Returns the two
+ * nearest levels below (supports) and above (resistances) the current price.
+ */
+fun findKeyLevels(highs: List<Double>, lows: List<Double>, cur: Double,
+                  k: Int = 4): Pair<List<Double>, List<Double>> {
+    if (highs.size < 2 * k + 1) return emptyList<Double>() to emptyList()
+    val pivH = mutableListOf<Double>()
+    val pivL = mutableListOf<Double>()
+    for (i in k until highs.size - k) {
+        var isH = true
+        var isL = true
+        for (j in -k..k) {
+            if (highs[i + j] > highs[i]) isH = false
+            if (lows[i + j] < lows[i]) isL = false
+        }
+        if (isH) pivH.add(highs[i])
+        if (isL) pivL.add(lows[i])
+    }
+    fun cluster(vals: List<Double>): List<Double> {
+        if (vals.isEmpty()) return emptyList()
+        val s = vals.sorted()
+        val groups = mutableListOf<MutableList<Double>>()
+        for (v in s) {
+            val g = groups.lastOrNull()
+            if (g != null && v - g.last() <= cur * 0.012) g.add(v)
+            else groups.add(mutableListOf(v))
+        }
+        return groups.map { it.average() }
+    }
+    val below = cluster(pivL.filter { it < cur * 0.995 }).filter { it < cur }
+    val above = cluster(pivH.filter { it > cur * 1.005 }).filter { it > cur }
+    return (below.takeLast(2)) to (above.take(2))
+}
+
+/**
  * Minimal candlestick chart drawn with Canvas. Red/blue follow the JP color
  * convention (red up, blue down). Enough for a quick trend read.
  */
 @Composable
-fun CandlestickChart(bars: List<KLine>, modifier: Modifier = Modifier) {
+fun CandlestickChart(
+    bars: List<KLine>,
+    modifier: Modifier = Modifier,
+    supports: List<Double> = emptyList(),
+    resistances: List<Double> = emptyList(),
+) {
     if (bars.size < 2) return
     val closes = bars.map { it.close }
     var lo = bars.minOf { it.low }
     var hi = bars.maxOf { it.high }
     val pad = (hi - lo) * 0.05
     lo -= pad; hi += pad
+    // ensure levels sit inside the plotted range
+    for (lv in supports + resistances) {
+        if (lv < lo) lo = lv
+        if (lv > hi) hi = lv
+    }
+    val vPad = (hi - lo) * 0.02
+    lo -= vPad; hi += vPad
 
     // moving average 20 & 60
     val ma20 = movingAvg(closes, 20)
@@ -52,6 +104,31 @@ fun CandlestickChart(bars: List<KLine>, modifier: Modifier = Modifier) {
             val top = minOf(yOpen, yClose)
             val bodyH = abs(yClose - yOpen).coerceAtLeast(1.5f)
             drawRect(color, Offset(x - bw / 2, top), Size(bw, bodyH))
+        }
+
+        // support / resistance level lines with price labels
+        if (supports.isNotEmpty() || resistances.isNotEmpty()) {
+            val dashed = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
+            val tp = Paint().apply {
+                isAntiAlias = true
+                textSize = 11f
+                color = android.graphics.Color.WHITE
+            }
+            fun priceLabel(v: Double): String =
+                if (v >= 1000) String.format(java.util.Locale.US, "%.0f", v)
+                else String.format(java.util.Locale.US, "%.1f", v)
+            fun drawLevels(list: List<Double>, color: Color) {
+                for (pv in list) {
+                    val yy = y(pv)
+                    drawLine(color, Offset(0f, yy), Offset(w, yy), 1.5f,
+                        pathEffect = dashed)
+                    drawIntoCanvas { canvas ->
+                        canvas.nativeCanvas.drawText(priceLabel(pv), 4f, yy - 3f, tp)
+                    }
+                }
+            }
+            drawLevels(supports, DownBlue)
+            drawLevels(resistances, UpRed)
         }
 
         // moving averages as lines

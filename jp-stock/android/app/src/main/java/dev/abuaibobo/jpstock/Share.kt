@@ -9,11 +9,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** Builds a shareable text for one pick (defaults to Japanese blurb). */
 fun buildShareText(p: Pick): String {
+    if (p.pitch.isNotBlank()) {
+        return p.pitch  // client-facing Chinese buy case
+    }
     val ja = if (p.reasonJa.isNotBlank()) p.reasonJa else {
         "【日株ピック】${p.name}(${p.code}) ¥${fmt(p.price)} スコア${fmt1(p.score)}\n" +
             p.reason + "\n※投資助言ではありません。"
@@ -67,6 +72,14 @@ fun ShareRow(p: Pick, context: Context) {
         Text("分享 ", fontSize = 13.sp, color = FlatGray)
         TextButton(onClick = { shareToJapanPlatforms(context, buildShareText(p)) }) {
             Text("X · LINE · Facebook", fontSize = 13.sp)
+        }
+        if (p.pitch.isNotBlank()) {
+            val clipboard = LocalClipboardManager.current
+            OutlinedButton(onClick = {
+                clipboard.setText(AnnotatedString(buildShareText(p)))
+            }) {
+                Text("复制购买理由", fontSize = 13.sp)
+            }
         }
     }
 }
