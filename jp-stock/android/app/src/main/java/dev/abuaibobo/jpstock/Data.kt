@@ -22,7 +22,10 @@ data class Pick(
     val m6: Double?, val m12: Double?, val reason: String,
     val reasonJa: String = "",
     val aiReason: String = "",
+    val tags: List<String> = emptyList(),
 )
+
+data class DailyFeed(val strategy: String, val picks: List<Pick>)
 
 data class IndexQuote(
     val key: String, val name: String, val last: Double,
@@ -82,11 +85,16 @@ object Api {
         }
     }
 
-    suspend fun fetchDaily(): List<Pick> = withContext(Dispatchers.IO) {
+    suspend fun fetchDaily(): DailyFeed = withContext(Dispatchers.IO) {
         val obj = JSONObject(getText("$GITHUB_RAW/daily.json"))
         val arr = obj.getJSONArray("picks")
-        (0 until arr.length()).map { i ->
+        val picks = (0 until arr.length()).map { i ->
             val p = arr.getJSONObject(i)
+            val tags = mutableListOf<String>()
+            val ta = p.optJSONArray("tags")
+            if (ta != null) {
+                for (j in 0 until ta.length()) tags.add(ta.optString(j))
+            }
             Pick(
                 code = p.optString("code"),
                 name = p.optString("name"),
@@ -104,8 +112,10 @@ object Api {
                 reason = p.optString("reason"),
                 reasonJa = p.optString("reason_ja"),
                 aiReason = p.optString("ai_reason"),
+                tags = tags,
             )
         }
+        DailyFeed(obj.optString("strategy"), picks)
     }
 
     suspend fun fetchMarket(): MarketFeed = withContext(Dispatchers.IO) {

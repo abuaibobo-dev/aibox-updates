@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -83,14 +84,14 @@ fun AppRoot() {
 
 @Composable
 fun PicksScreen(onPick: (Pick) -> Unit) {
-    var picks by remember { mutableStateOf<List<Pick>?>(null) }
+    var feed by remember { mutableStateOf<DailyFeed?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     fun load() {
         scope.launch {
             loading = true; error = null
-            try { picks = Api.fetchDaily() }
+            try { feed = Api.fetchDaily() }
             catch (e: Exception) { error = e.message ?: "加载失败" }
             loading = false
         }
@@ -99,13 +100,20 @@ fun PicksScreen(onPick: (Pick) -> Unit) {
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text("日本股市 每日推荐", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("量化多因子 · 行业分散 · 非投资建议", fontSize = 12.sp, color = FlatGray)
-        Spacer(Modifier.height(10.dp))
+        Text("点卡片看K线/指标/AI解读 · 非投资建议", fontSize = 12.sp, color = FlatGray)
+        Spacer(Modifier.height(6.dp))
+        if (feed != null && feed!!.strategy.isNotBlank()) {
+            Card(colors = CardDefaults.cardColors(containerColor = AccentBlue.copy(alpha = 0.08f))) {
+                Text("🎯 ${feed!!.strategy}", Modifier.padding(10.dp), fontSize = 11.sp,
+                    color = TextSecondary)
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         when {
             loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
             error != null -> ErrorBox(error!!) { load() }
-            picks != null -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(picks!!, key = { it.code }) { p ->
+            feed != null -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(feed!!.picks, key = { it.code }) { p ->
                     PickCard(p, onClick = { onPick(p) })
                 }
             }
@@ -123,6 +131,11 @@ fun PickCard(p: Pick, onClick: () -> Unit) {
                 Text("¥${fmt(p.price)}", fontWeight = FontWeight.Bold)
             }
             Text("${p.industry} · 综合分 ${fmt1(p.score)}", fontSize = 12.sp, color = FlatGray)
+            if (p.tags.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text("🎯 " + p.tags.joinToString("  "), fontSize = 12.sp,
+                    color = AccentGold, fontWeight = FontWeight.Medium)
+            }
             Spacer(Modifier.height(6.dp))
             val chips = buildList {
                 p.per?.let { add("PE ${fmt1(it)}") }
