@@ -2,8 +2,9 @@ name: JPStock Daily data refresh
 
 on:
   schedule:
-    # 14:30 UTC = 23:30 JST after Tokyo close (~15:00 JST)
-    - cron: '30 14 * * 1-5'
+    # 06:30 UTC = 15:30 JST — ~30 min after Tokyo close (~15:00 JST) so the
+    # day's final bars are captured same-day (previously ran late at night).
+    - cron: '30 6 * * 1-5'
   workflow_dispatch:
 
 permissions:

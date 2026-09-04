@@ -24,31 +24,83 @@ import scoring as sc
 import export_daily as ed
 
 
+def _yahoo_price(code):
+    """Real-time price series from Yahoo (1y daily). Fresh even intraday."""
+    import urllib.request as uq
+    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.T"
+           f"?range=1y&interval=1d")
+    req = uq.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with uq.urlopen(req, timeout=20) as r:
+        d = json.load(r)
+    res = d["chart"]["result"][0]
+    m = res["meta"]
+    ts = res.get("timestamp") or []
+    q = res["indicators"]["quote"][0]
+    opens, highs, lows, closes, vols = (q["open"], q["high"], q["low"],
+                                        q["close"], q["volume"])
+    rows = []
+    for i, t in enumerate(ts):
+        c = closes[i]
+        if c is None:
+            continue
+        rows.append((t, opens[i], highs[i], lows[i], c, vols[i] or 0))
+    if len(rows) < 60:
+        raise ValueError(f"insufficient yahoo data for {code}")
+    closes = [r[4] for r in rows]
+    vols = [r[5] for r in rows]
+    last90 = rows[-90:]
+    return {
+        "closes": closes, "vols": vols,
+        "candles": [{"t": t, "o": o, "h": hi, "l": lo, "c": c}
+                    for t, o, hi, lo, c, _v in last90],
+        "price": (m.get("regularMarketPrice") or closes[-1]),
+        "name": m.get("longName") or m.get("shortName") or "",
+    }
+
+
 def build_analysis(code):
     """Return dict for one stock or raise."""
-    # --- price data from local DB (10y OHLCV) ---
+    # --- real-time prices from Yahoo (fresh; falls back to local DB) ---
     conn = fp.db_conn()
-    rows = conn.execute(
-        "SELECT ts, open, high, low, close, volume FROM daily WHERE code=? "
-        "AND close IS NOT NULL ORDER BY ts", (code,)
-    ).fetchall()
     meta = conn.execute(
-        "SELECT name, industry, last_price FROM stocks WHERE code=?", (code,)
+        "SELECT name, industry FROM stocks WHERE code=?", (code,)
     ).fetchone()
     conn.close()
-    if not rows:
-        raise ValueError(f"no price data for {code}")
-    closes = [r[4] for r in rows]
-    vols = [r[5] or 0 for r in rows]
-    name = (meta[0] if meta else "") or f"code {code}"
-    industry = meta[1] if meta else ""
-    price = closes[-1]
+    local_industry = meta[1] if meta else ""
+
+    try:
+        px = _yahoo_price(code)
+    except Exception:
+        # fallback: local 10y DB
+        conn = fp.db_conn()
+        rows = conn.execute(
+            "SELECT ts, open, high, low, close, volume FROM daily WHERE code=? "
+            "AND close IS NOT NULL ORDER BY ts", (code,)
+        ).fetchall()
+        conn.close()
+        if not rows:
+            raise ValueError(f"no price data for {code}")
+        closes = [r[4] for r in rows]
+        vols = [r[5] or 0 for r in rows]
+        px = {
+            "closes": closes, "vols": vols,
+            "candles": [{"t": r[0], "o": r[1], "h": r[2], "l": r[3], "c": r[4]}
+                        for r in rows[-90:]],
+            "price": closes[-1],
+            "name": (meta[0] if meta else "") or f"code {code}",
+        }
+
+    closes, vols = px["closes"], px["vols"]
+    price = px["price"]
+    name = px["name"] or (meta[0] if meta else "") or f"code {code}"
+    industry = local_industry
 
     # technical snapshot
     tech = sc.score_stock(closes, vols)
     trend = tech["score"] if tech else None
     # indicators + candles (last 90 bars)
     ind = sc_indicator_snapshot(closes)
+    candles = px["candles"]
 
     # --- real-time valuation from irbank (fresh fetch) ---
     fund = {}
@@ -68,12 +120,6 @@ def build_analysis(code):
     m126 = tech["m126"] if tech else None
     m252 = tech["m252"] if tech else None
     dd = tech["dd_pct"] if tech else None
-
-    # candles for the chart: last 90 bars {t,o,h,l,c}
-    last90 = rows[-90:]
-    candles = [{
-        "t": t, "o": o, "h": hi, "l": lo, "c": c,
-    } for t, o, hi, lo, c, _v in last90]
 
     # --- AI analyst note (optional) ---
     ai_zh, ai_ja = "", ""
