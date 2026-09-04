@@ -36,11 +36,25 @@ def init():
         )
 
 
-def series(code, kind):
+def _http_get(code, kind):
     u = f"https://irbank.net/{code}/{kind}"
-    req = urllib.request.Request(u, headers=UA)
-    with urllib.request.urlopen(req, timeout=20) as r:
-        h = r.read().decode("utf-8", "replace")
+    last = None
+    for attempt in range(4):
+        try:
+            req = urllib.request.Request(u, headers=UA)
+            with urllib.request.urlopen(req, timeout=25) as r:
+                return r.read().decode("utf-8", "replace")
+        except Exception as e:
+            last = e
+            code_n = getattr(e, "code", None)
+            if code_n is not None and 400 <= code_n < 500 and code_n != 429:
+                raise
+            time.sleep(2 * (attempt + 1))
+    raise last
+
+
+def series(code, kind):
+    h = _http_get(code, kind)
     pairs = re.findall(
         r"<dt>(\d{4})年\d+月\d+日</dt><dd>.*?<span class=\"text\">([^<]+)</span>",
         h, re.S)
