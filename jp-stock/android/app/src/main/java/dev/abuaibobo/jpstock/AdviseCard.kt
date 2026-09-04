@@ -48,29 +48,22 @@ fun generateAdviseCard(context: Context, p: Pick): Uri? {
         else -> String.format(Locale.US, "%.1f", v)
     }
 
-    val date = SimpleDateFormat("yyyy/MM/dd", Locale.US).format(Date())
-
-    // ---- build text blocks: (paint, text) ----
+    // ---- build text blocks (pure content, no app branding) ----
     val blocks = ArrayList<Pair<TextPaint, String>>()
-    blocks.add(tp(28f, smallC) to "JPStock ・ 銘柄カード（$date）")
-    blocks.add(tp(56f, whiteC, bold = true) to "${p.name}　（${p.code}）")
+    blocks.add(tp(52f, whiteC, bold = true) to "${p.name}　（${p.code}）")
     blocks.add(tp(30f, smallC) to (p.industry ?: ""))
     blocks.add(tp(44f, goldC, bold = true) to "現在値 ${fv(p.price)}円")
-    blocks.add(tp(2f, 0) to "")  // spacer
+    blocks.add(tp(2f, 0) to "")
     fun actionBlock(label: String, v1: Double?, v2: Double?) {
         if (v1 == null) return
         val vv = fv(v1) + (if (v2 != null) " 〜 " + fv(v2) else "")
-        blocks.add(tp(36f, blueC, bold = true) to "$label ")
-        // append value onto same paint won't recolor; draw as separate line instead
-        blocks.add(tp(36f, whiteC) to vv)
+        blocks.add(tp(36f, whiteC, bold = true) to "・$label：$vv")
     }
     actionBlock("買い目安", p.buyLow, p.buyHigh)
     actionBlock("損切り", p.stop, null)
     actionBlock("利確目標", p.t1, p.t2)
     blocks.add(tp(2f, 0) to "")
     blocks.add(tp(32f, textC) to (p.pitchJa ?: ""))
-    blocks.add(tp(2f, 0) to "")
-    blocks.add(tp(24f, footC) to "JPStock — 分析情報提供資料（投資判断はお客様自身で）")
 
     // ---- measure total height (two-pass) ----
     val layouts = ArrayList<StaticLayout>()
