@@ -50,8 +50,26 @@ fun findKeyLevels(highs: List<Double>, lows: List<Double>, cur: Double,
         }
         return groups.map { it.average() }
     }
-    val below = cluster(pivL.filter { it < cur * 0.995 }).filter { it < cur }
-    val above = cluster(pivH.filter { it > cur * 1.005 }).filter { it > cur }
+    var below = cluster(pivL.filter { it < cur * 0.995 }).filter { it < cur }
+    var above = cluster(pivH.filter { it > cur * 1.005 }).filter { it > cur }
+    // fixed display: always 2 supports + 2 resistances; top up with percentage
+    // probes when the swing detector found fewer.
+    val supProbes = doubleArrayOf(0.99, 0.965, 0.94)
+    for (probe in supProbes) {
+        if (below.size >= 2) break
+        val v = cur * probe
+        if (!below.any { abs(it - v) <= cur * 0.004 }) {
+            below = (below + v).sorted()
+        }
+    }
+    val resProbes = doubleArrayOf(1.01, 1.035, 1.07)
+    for (probe in resProbes) {
+        if (above.size >= 2) break
+        val v = cur * probe
+        if (!above.any { abs(it - v) <= cur * 0.004 }) {
+            above = (above + v).sorted()
+        }
+    }
     return (below.takeLast(2)) to (above.take(2))
 }
 
@@ -106,24 +124,26 @@ fun CandlestickChart(
             drawRect(color, Offset(x - bw / 2, top), Size(bw, bodyH))
         }
 
-        // support / resistance level lines with price labels
+        // support / resistance level lines: short right-hand ticks + labels
         if (supports.isNotEmpty() || resistances.isNotEmpty()) {
             val dashed = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
             val tp = Paint().apply {
                 isAntiAlias = true
                 textSize = 11f
                 color = android.graphics.Color.WHITE
+                textAlign = android.graphics.Paint.Align.RIGHT
             }
             fun priceLabel(v: Double): String =
                 if (v >= 1000) String.format(java.util.Locale.US, "%.0f", v)
                 else String.format(java.util.Locale.US, "%.1f", v)
+            val tickFrom = w * 0.62f
             fun drawLevels(list: List<Double>, color: Color) {
                 for (pv in list) {
                     val yy = y(pv)
-                    drawLine(color, Offset(0f, yy), Offset(w, yy), 1.5f,
+                    drawLine(color, Offset(tickFrom, yy), Offset(w, yy), 1.5f,
                         pathEffect = dashed)
                     drawIntoCanvas { canvas ->
-                        canvas.nativeCanvas.drawText(priceLabel(pv), 4f, yy - 3f, tp)
+                        canvas.nativeCanvas.drawText(priceLabel(pv), w - 8f, yy - 4f, tp)
                     }
                 }
             }
