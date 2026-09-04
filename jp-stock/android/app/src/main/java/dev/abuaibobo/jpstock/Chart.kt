@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -49,7 +50,7 @@ fun CandlestickChart(bars: List<KLine>, modifier: Modifier = Modifier) {
             val yClose = y(b.close)
             val top = minOf(yOpen, yClose)
             val bodyH = abs(yClose - yOpen).coerceAtLeast(1.5f)
-            drawRect(color, Offset(x - bw / 2, top), bw, bodyH)
+            drawRect(color, Offset(x - bw / 2, top), Size(bw, bodyH))
         }
 
         // moving averages as lines
