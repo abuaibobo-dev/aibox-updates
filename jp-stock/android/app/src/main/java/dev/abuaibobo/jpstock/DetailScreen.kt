@@ -74,12 +74,13 @@ fun PickDetailScreen(p: Pick, onBack: () -> Unit) {
                 }
                 error != null -> ErrorBox(error!!) { load() }
                 candles != null -> {
-                    Text("近1年日K · 延迟行情(自动60s刷新) · 红涨蓝跌 · 蓝虚线=支撑 红虚线=压力",
+                    Text("近1年日K · 红涨蓝跌 · 蓝/红虚线=支撑/压力 · 长按可保存图片",
                         fontSize = 12.sp, color = FlatGray)
                     val kls = candles!!
                     val (sup, res) = findKeyLevels(
                         kls.map { it.high }, kls.map { it.low }, kls.last().close)
-                    CandlestickChart(kls, Modifier.fillMaxWidth().height(240.dp),
+                    CapturableChart(bars = kls, fileName = p.code,
+                        modifier = Modifier.fillMaxWidth().height(240.dp),
                         supports = sup, resistances = res)
                     Spacer(Modifier.height(10.dp))
 

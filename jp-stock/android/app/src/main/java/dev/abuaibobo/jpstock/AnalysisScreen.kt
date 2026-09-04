@@ -84,12 +84,13 @@ fun AnalysisResultView(a: AnalysisData) {
         Spacer(Modifier.height(8.dp))
 
         if (a.candles.isNotEmpty()) {
-            Text("近3个月日K · 红涨蓝跌 · 蓝虚线=支撑 红虚线=压力",
+            Text("近3个月日K · 红涨蓝跌 · 蓝/红虚线=支撑/压力 · 长按可保存图片",
                 fontSize = 12.sp, color = FlatGray)
             val kl = a.candles.map { KLine(it.ts, it.open, it.high, it.low, it.close, 0) }
             val (sup, res) = findKeyLevels(
                 a.candles.map { it.high }, a.candles.map { it.low }, a.price)
-            CandlestickChart(kl, Modifier.fillMaxWidth().height(240.dp),
+            CapturableChart(bars = kl, fileName = a.code,
+                modifier = Modifier.fillMaxWidth().height(240.dp),
                 supports = sup, resistances = res)
             if (sup.isNotEmpty() || res.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
