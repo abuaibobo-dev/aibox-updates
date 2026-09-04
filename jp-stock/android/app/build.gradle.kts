@@ -4,6 +4,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Version injected by CI (see .github/workflows/jp-build.yml); fallback locally.
+val buildVersionCode = (System.getenv("VERSION_CODE") ?: "1").toIntOrNull() ?: 1
+val buildVersionName = System.getenv("VERSION_NAME") ?: "1.0"
+
 android {
     namespace = "dev.abuaibobo.jpstock"
     compileSdk = 34
@@ -12,8 +16,8 @@ android {
         applicationId = "dev.abuaibobo.jpstock"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = buildVersionCode
+        versionName = buildVersionName
     }
 
     buildTypes {

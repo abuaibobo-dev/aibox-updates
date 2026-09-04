@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun MarketScreen(onOpenCode: (String) -> Unit = {}) {
     var view by remember { mutableStateOf(0) }  // 0 sectors, 1 stocks
+    var selInd by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -27,14 +28,16 @@ fun MarketScreen(onOpenCode: (String) -> Unit = {}) {
                 label = { Text("全部股票") })
         }
         when (view) {
-            0 -> SectorView()
-            1 -> StockView(onOpenCode)
+            0 -> SectorView(onOpenIndustry = { ind ->
+                selInd = ind; view = 1
+            })
+            1 -> StockView(initialInd = selInd, onOpenCode = onOpenCode)
         }
     }
 }
 
 @Composable
-fun SectorView() {
+fun SectorView(onOpenIndustry: (String) -> Unit = {}) {
     var feed by remember { mutableStateOf<MarketFeed?>(null) }
     var liveIndices by remember { mutableStateOf<List<IndexQuote>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -72,11 +75,11 @@ fun SectorView() {
                 }
             }
             item {
-                Text("行业涨跌 (${feed!!.sectors.size}个)", fontWeight = FontWeight.SemiBold,
+                Text("行业涨跌 · 点击板块查看成分股", fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp)
                 Spacer(Modifier.height(4.dp))
             }
-            items(feed!!.sectors) { s -> SectorRow(s) }
+            items(feed!!.sectors) { s -> SectorRow(s, onClick = { onOpenIndustry(s.name) }) }
         }
     }
 }
@@ -98,24 +101,31 @@ fun IndexCard(ix: IndexQuote, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun SectorRow(s: Sector) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(s.name, Modifier.weight(1f), fontSize = 14.sp)
-        Text("${s.count}只", fontSize = 12.sp, color = FlatGray,
-            modifier = Modifier.padding(end = 12.dp))
-        Text(pct(s.chgDay / 100), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-            color = if (s.chgDay >= 0) UpRed else DownBlue)
+@Composable
+fun SectorRow(s: Sector, onClick: () -> Unit = {}) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
+            Text(s.name, Modifier.weight(1f), fontSize = 14.sp)
+            Text("${s.count}只", fontSize = 12.sp, color = FlatGray,
+                modifier = Modifier.padding(end = 12.dp))
+            Text(pct(s.chgDay / 100), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                color = if (s.chgDay >= 0) UpRed else DownBlue)
+            Text(" ›", fontSize = 16.sp, color = FlatGray,
+                modifier = Modifier.padding(start = 6.dp))
+        }
+        HorizontalDivider(color = BorderDark)
     }
 }
 
 /** Browse all Prime stocks: industry filter chips + searchable, tappable list. */
 @Composable
-fun StockView(onOpenCode: (String) -> Unit) {
+fun StockView(onOpenCode: (String) -> Unit, initialInd: String = "") {
     var feed by remember { mutableStateOf<StockFeed?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
-    var selInd by remember { mutableStateOf("") }
+    var selInd by remember { mutableStateOf(initialInd) }
     var query by remember { mutableStateOf("") }
+    LaunchedEffect(initialInd) { selInd = initialInd }
     val scope = rememberCoroutineScope()
     fun load() {
         scope.launch {

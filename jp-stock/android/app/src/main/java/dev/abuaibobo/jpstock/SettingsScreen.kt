@@ -102,7 +102,16 @@ fun SettingsScreen(onSaved: () -> Unit) {
 
         Card(colors = CardDefaults.cardColors(containerColor = CardDark)) {
             Column(Modifier.padding(12.dp)) {
-                Text("关于", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("关于", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    val ver = remember {
+                        runCatching {
+                            context.packageManager
+                                .getPackageInfo(context.packageName, 0).versionName
+                        }.getOrDefault("")
+                    }
+                    Text("版本 $ver", fontSize = 12.sp, color = FlatGray)
+                }
                 Spacer(Modifier.height(4.dp))
                 Text("日股分析 · 每日推荐 (价值+质量多因子)\n" +
                     "股票池: 东证 Prime\n" +

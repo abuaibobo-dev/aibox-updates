@@ -19,8 +19,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Compute build version
+        id: ver
+        run: echo "code=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build debug APK
         working-directory: jp-stock/android
+        env:
+          VERSION_CODE: ${{ steps.ver.outputs.code }}
+          VERSION_NAME: "1.0.${{ steps.ver.outputs.code }}"
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
