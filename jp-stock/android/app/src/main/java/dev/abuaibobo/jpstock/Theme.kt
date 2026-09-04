@@ -19,6 +19,9 @@ val BorderDark = Color(0xFF23262B)
 val TextPrimary = Color(0xFFF0F2F4)
 val TextSecondary = Color(0xFF9AA1A8)
 
+// Legacy alias used by many screens for secondary/gray text.
+val FlatGray = TextSecondary
+
 // Single accent for interactive / anchor text and highlights
 val AccentBlue = Color(0xFF63A8FF)
 val AccentGold = Color(0xFFD9B24A)   // kept small (e.g. tags) — minimal use
