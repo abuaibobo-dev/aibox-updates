@@ -47,4 +47,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.compose.material:material-icons-extended:1.6.8")
+    implementation("com.patrykandpatrick.vico:compose:1.16.1")
 }
