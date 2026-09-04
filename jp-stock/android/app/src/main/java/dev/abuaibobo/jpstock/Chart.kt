@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 private val UpColor = Color(0xFFE53935)      // JP convention: red = up
 private val DownColor = Color(0xFF1E88E5)    // blue = down
