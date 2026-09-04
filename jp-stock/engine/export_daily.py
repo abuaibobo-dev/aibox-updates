@@ -157,6 +157,28 @@ def build_pitch(d):
     return lead + body + tail
 
 
+def client_fit(d):
+    """Profile hint: which kind of client this name fits (zh for the adviser,
+    ja embedded into the client note)."""
+    dy = d.get("div_yield")
+    roe = d.get("roe")
+    m12 = d.get("m12")
+    m6 = d.get("m6")
+    if dy is not None and dy >= 3.0:
+        zh = "偏中长期 · 股息/现金流回报型"
+        ja = "配当・インカムを重視する中長期投資向け"
+    elif roe is not None and roe >= 15:
+        zh = "偏成长 · 盈利质量高中长期持有"
+        ja = "収益性の高い成長株として、中長期の保有向け"
+    elif (m12 or 0) >= 0.4 or (m6 or 0) >= 0.25:
+        zh = "偏趋势交易 · 波动较大，注意仓位与止损"
+        ja = "中短期の値動きを活かす投資向け（値動きにご注意）"
+    else:
+        zh = "均衡型 · 适合作为组合配置的一角"
+        ja = "分散投資の一環としての保有に適性"
+    return zh, ja
+
+
 def build_pitch_ja(d):
     """Japanese client-facing rationale (polite です/ます register)."""
     nm = d.get("name", d.get("code", ""))
@@ -201,6 +223,10 @@ def build_pitch_ja(d):
         risks.append("配当水準は限定的")
     for r in (risks or ["業績や市況の変動リスク"]):
         out.append(f"・{r}")
+    out.append("")
+    _zf, jaf = client_fit(d)
+    out.append("＜投資スタイル（目安）＞")
+    out.append(f"・{jaf}")
     out.append("")
     out.append("※本内容は情報提供を目的とした分析資料であり、投資勧誘を目的とするものでは"
                "ありません。最終的な投資判断はお客様ご自身でお願いいたします。")
@@ -255,6 +281,9 @@ def main():
         }
         d["pitch"] = build_pitch(d)
         d["pitch_ja"] = build_pitch_ja(d)
+        fit_zh, fit_ja = client_fit(d)
+        d["fit_zh"] = fit_zh
+        d["fit_ja"] = fit_ja
 
         # actionable levels (buy zone / stop / targets) from recent ~90 bars
         px_now = d.get("price")

@@ -30,6 +30,7 @@ data class Pick(
     val stop: Double? = null,
     val t1: Double? = null,
     val t2: Double? = null,
+    val fitZh: String = "",
 )
 
 data class DailyFeed(val strategy: String, val picks: List<Pick>)
@@ -145,6 +146,7 @@ object Api {
                 stop = p.optJSONObject("action")?.optDouble("stop"),
                 t1 = p.optJSONObject("action")?.optDouble("t1"),
                 t2 = p.optJSONObject("action")?.optDouble("t2"),
+                fitZh = p.optString("fit_zh"),
             )
         }
         DailyFeed(obj.optString("strategy"), picks)

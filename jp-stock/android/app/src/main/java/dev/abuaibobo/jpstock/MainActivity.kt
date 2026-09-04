@@ -153,6 +153,9 @@ fun PickCard(p: Pick, onClick: () -> Unit) {
                 Text("🎯 " + p.tags.joinToString("  "), fontSize = 12.sp,
                     color = AccentGold, fontWeight = FontWeight.Medium)
             }
+            if (p.fitZh.isNotBlank()) {
+                Text("适配：" + p.fitZh, fontSize = 11.sp, color = AccentBlue)
+            }
             if (p.buyLow != null) {
                 Spacer(Modifier.height(5.dp))
                 Row(Modifier.fillMaxWidth(),
