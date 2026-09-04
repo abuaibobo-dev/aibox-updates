@@ -68,6 +68,13 @@ fun SettingsScreen(onSaved: () -> Unit) {
                             status = if (ok) "✅ 后端连接正常" else "❌ 无法连接后端"
                         }
                     }) { Text("测试连接") }
+                    OutlinedButton(onClick = {
+                        base = DEFAULT_BASE
+                        Api.setAnalysisBase(DEFAULT_BASE)
+                        saveBase(context, DEFAULT_BASE)
+                        saved = true
+                        onSaved()
+                    }) { Text("恢复默认") }
                 }
                 if (status != null) {
                     Spacer(Modifier.height(6.dp))
@@ -117,6 +124,33 @@ fun SettingsScreen(onSaved: () -> Unit) {
                     "股票池: 东证 Prime\n" +
                     "行情: Yahoo(延迟) · 估值: irbank · AI: DeepSeek\n" +
                     "数据与策略仅供研究参考，非投资建议。",
+                    fontSize = 12.sp, color = TextSecondary)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+
+        Card(colors = CardDefaults.cardColors(containerColor = CardDark)) {
+            Column(Modifier.padding(12.dp)) {
+                Text("数据说明", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Spacer(Modifier.height(4.dp))
+                Text("· 行情/日K: Yahoo Finance（盘中延迟约15-20分，收盘后更新）\n" +
+                    "· 估值(PE/PB/ROE/股息): irbank 实时\n" +
+                    "· 估值历史分位: 本地历年财报数据库\n" +
+                    "· AI 解读/日文荐股文: DeepSeek\n" +
+                    "· 每日推荐: 收盘后自动更新（东证Prime全市场筛选）",
+                    fontSize = 12.sp, color = TextSecondary)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+
+        Card(colors = CardDefaults.cardColors(containerColor = CardDark)) {
+            Column(Modifier.padding(12.dp)) {
+                Text("使用与合规", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Spacer(Modifier.height(4.dp))
+                Text("· 界面为中文；发给客户的内容（荐股文）自动为日文\n" +
+                    "· 日文荐股文已含「非投资劝诱、最终判断请客户自行决定」说明\n" +
+                    "· 本App用于持牌投顾的分析研究辅助\n" +
+                    "· 行情存在延迟，数据与策略仅供研究参考，不构成投资建议",
                     fontSize = 12.sp, color = TextSecondary)
             }
         }
