@@ -31,7 +31,7 @@ fun MarketScreen() {
 
     when {
         loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-        error != null -> ErrorBox(error!!) { load() }
+        error != null -> ErrorBox(error!!, load)
         feed != null -> LazyColumn(
             Modifier.fillMaxSize().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -42,7 +42,7 @@ fun MarketScreen() {
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    feed!!.indices.forEach { IndexCard(it, Modifier.weight(1f)) }
+                    feed!!.indices.forEach { IndexCard(it) }
                 }
             }
             item {
@@ -57,8 +57,8 @@ fun MarketScreen() {
 }
 
 @Composable
-fun IndexCard(ix: IndexQuote, modifier: Modifier = Modifier) {
-    Card(modifier) {
+fun IndexCard(ix: IndexQuote) {
+    Card(Modifier.weight(1f)) {
         Column(Modifier.padding(12.dp)) {
             Text(ix.name, fontSize = 13.sp, color = Color.Gray)
             Text(fmt(ix.last), fontSize = 18.sp, fontWeight = FontWeight.Bold)

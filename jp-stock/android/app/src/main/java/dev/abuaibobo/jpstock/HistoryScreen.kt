@@ -31,7 +31,7 @@ fun HistoryScreen() {
 
     when {
         loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-        error != null -> ErrorBox(error!!) { load() }
+        error != null -> ErrorBox(error!!, load)
         feed != null -> LazyColumn(
             Modifier.fillMaxSize().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
