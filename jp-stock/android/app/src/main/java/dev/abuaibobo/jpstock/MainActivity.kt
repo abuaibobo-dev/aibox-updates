@@ -96,7 +96,7 @@ fun PicksScreen(onPick: (Pick) -> Unit) {
         Spacer(Modifier.height(10.dp))
         when {
             loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-            error != null -> ErrorBox(error!!, load)
+            error != null -> ErrorBox(error!!) { load() }
             picks != null -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(picks!!, key = { it.code }) { p ->
                     PickCard(p, onClick = { onPick(p) })

@@ -61,7 +61,7 @@ fun PickDetailScreen(p: Pick, onBack: () -> Unit) {
 
             when {
                 loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-                error != null -> ErrorBox(error!!, load)
+                error != null -> ErrorBox(error!!) { load() }
                 candles != null -> {
                     Text("近1年日K (红涨蓝跌, 黄MA20 紫MA60)", fontSize = 12.sp, color = Color.Gray)
                     CandlestickChart(candles!!, Modifier.fillMaxWidth().height(280.dp))

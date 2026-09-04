@@ -52,7 +52,7 @@ object Api {
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    private fun getText(url: String): String = withContext(Dispatchers.IO) {
+    private suspend fun getText(url: String): String = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(url).build()
         client.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) throw RuntimeException("HTTP ${resp.code}")
@@ -60,7 +60,7 @@ object Api {
         }
     }
 
-    fun fetchDaily(): List<Pick> = withContext(Dispatchers.IO) {
+    suspend fun fetchDaily(): List<Pick> = withContext(Dispatchers.IO) {
         val obj = JSONObject(getText("$GITHUB_RAW/daily.json"))
         val arr = obj.getJSONArray("picks")
         (0 until arr.length()).map { i ->
@@ -83,7 +83,7 @@ object Api {
         }
     }
 
-    fun fetchMarket(): MarketFeed = withContext(Dispatchers.IO) {
+    suspend fun fetchMarket(): MarketFeed = withContext(Dispatchers.IO) {
         val obj = JSONObject(getText("$GITHUB_RAW/market.json"))
         val ivals = obj.getJSONArray("indices")
         val indices = (0 until ivals.length()).map { i ->
@@ -102,7 +102,7 @@ object Api {
         MarketFeed(obj.optString("date"), indices, sectors)
     }
 
-    fun fetchHistory(): HistoryFeed = withContext(Dispatchers.IO) {
+    suspend fun fetchHistory(): HistoryFeed = withContext(Dispatchers.IO) {
         val obj = JSONObject(getText("$GITHUB_RAW/history.json"))
         val darr = obj.getJSONArray("days")
         val days = (0 until darr.length()).map { di ->
@@ -125,7 +125,7 @@ object Api {
     }
 
     /** Candles straight from Yahoo v8 chart API (no auth needed). */
-    fun fetchCandles(code: String): List<KLine> = withContext(Dispatchers.IO) {
+    suspend fun fetchCandles(code: String): List<KLine> = withContext(Dispatchers.IO) {
         val url = "https://query1.finance.yahoo.com/v8/finance/chart/$code.T" +
             "?range=1y&interval=1d"
         val req = Request.Builder().url(url)

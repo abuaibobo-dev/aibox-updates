@@ -35,7 +35,7 @@ fun CandlestickChart(bars: List<KLine>, modifier: Modifier = Modifier) {
         val h = size.height
         val n = bars.size
         val slot = w / n
-        val bw = (slot * 0.6).coerceAtMost(8f)
+        val bw = (slot * 0.6f).coerceAtMost(8f)
         fun y(v: Double): Float = ((hi - v) / (hi - lo) * h).toFloat()
 
         bars.forEachIndexed { i, b ->
