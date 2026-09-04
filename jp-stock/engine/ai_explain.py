@@ -37,11 +37,15 @@ def _build_prompt(p):
     if p.get("dd") is not None: parts.append(f"距52周高 {p['dd']*100:+.0f}%")
     data = "\n".join(parts)
     return (
-        "你是日本股市分析师。根据给定数据写一段客观的研究笔记，"
-        "结论先行(看多/看空/中性)，随后给出1-2条关键理由与1条风险提示。"
-        f"控制在{MAX_CHARS}字以内，措辞谨慎、不做收益承诺、不构成投资建议。\n"
+        "你是为持牌投顾做辅助分析的日本股市分析师。根据给定数据，面向个人投资者输出"
+        "一份结构化研究笔记（简体中文，200-300字）。要求：\n"
+        "第1行给出结论（看多/中性/看空 + 一句话定性）；\n"
+        "随后按「基本面」「估值」「股息与回报」「走势与动量」「主要风险」「关注要点」"
+        "分点（每点一行，基于数据给出具体判断）。\n"
+        "客观严谨，不做收益承诺，明确提示不构成投资建议。\n"
         f"数据如下:\n{data}\n"
-        "只输出 JSON: {\"zh\": \"中文笔记\", \"ja\": \"对应的一句日文\"}"
+        "只输出 JSON: {\"zh\": \"用\\n分行的完整中文笔记\", "
+        "\"ja\": \"对应的一行日文摘要\"}"
     )
 
 
@@ -56,7 +60,7 @@ def call_deepseek(prompt):
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.4,
-        "max_tokens": 400,
+        "max_tokens": 800,
         "response_format": {"type": "json_object"},
     }).encode()
     req = urllib.request.Request(

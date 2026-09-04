@@ -1,5 +1,6 @@
 package dev.abuaibobo.jpstock
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -8,6 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,9 +80,47 @@ fun AnalysisResultView(a: AnalysisData) {
             fontSize = 12.sp, color = FlatGray)
         Spacer(Modifier.height(6.dp))
 
+        if (a.adviceZh.isNotBlank()) {
+            Card(Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, AccentBlue),
+                colors = CardDefaults.cardColors(containerColor = CardDark)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("操作参考 · 价位建议", fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp, color = AccentBlue)
+                    Spacer(Modifier.height(6.dp))
+                    Text(a.adviceZh, fontSize = 13.sp, lineHeight = 19.sp)
+                    if (a.adviceJa.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        val clipboard = LocalClipboardManager.current
+                        OutlinedButton(onClick = {
+                            clipboard.setText(AnnotatedString(a.adviceJa))
+                        }) { Text("复制日文操作建议 · 发客户", fontSize = 12.sp) }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             a.pbrPct?.let { PercentChip("PB历史分位", it, lowerBetter = true) }
             a.perPct?.let { PercentChip("PE历史分位", it, lowerBetter = true) }
+        }
+        Spacer(Modifier.height(8.dp))
+
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardDark)) {
+            Column(Modifier.padding(12.dp)) {
+                Text("基本面与估值", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Spacer(Modifier.height(6.dp))
+                a.per?.let { MetricRow("市盈率 PE", fmt1(it), null) }
+                a.pbr?.let { MetricRow("市净率 PB", fmt2(it), null) }
+                a.roe?.let { MetricRow("ROE 净资产收益率", fmt1(it) + "%", null) }
+                a.divYield?.let { MetricRow("股息率", fmt1(it) + "%", null) }
+                if (a.per == null && a.pbr == null) {
+                    Text("暂无实时估值（irbank 未收录）", fontSize = 12.sp, color = FlatGray)
+                }
+                Text("注：PE/PB 越低相对越便宜；ROE 越高盈利质量越好。分位见上方。",
+                    fontSize = 11.sp, color = FlatGray)
+            }
         }
         Spacer(Modifier.height(8.dp))
 

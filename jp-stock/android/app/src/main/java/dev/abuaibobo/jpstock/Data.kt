@@ -59,6 +59,8 @@ data class AnalysisData(
     val ma20: Double?, val ma60: Double?, val ma200: Double?,
     val candles: List<CandleBar>,
     val aiReason: String,
+    val adviceZh: String = "",
+    val adviceJa: String = "",
 )
 
 data class IndustryCat(val name: String, val count: Int)
@@ -310,6 +312,8 @@ object Api {
             ma20 = d(ind, "ma20"), ma60 = d(ind, "ma60"), ma200 = d(ind, "ma200"),
             candles = candles,
             aiReason = o.optString("ai_reason"),
+            adviceZh = o.optJSONObject("advice")?.optString("zh") ?: "",
+            adviceJa = o.optJSONObject("advice")?.optString("ja") ?: "",
         )
     }
 }
