@@ -153,6 +153,16 @@ fun PickCard(p: Pick, onClick: () -> Unit) {
                 Text("🎯 " + p.tags.joinToString("  "), fontSize = 12.sp,
                     color = AccentGold, fontWeight = FontWeight.Medium)
             }
+            if (p.buyLow != null) {
+                Spacer(Modifier.height(5.dp))
+                Row(Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LevelLbl("低吸", p.buyLow, p.buyHigh)
+                    LevelLbl("止损", p.stop, null)
+                    LevelLbl("目标", p.t1, p.t2)
+                }
+                Text("点卡片 → 完整操作建议 / 日文发客户", fontSize = 10.sp, color = FlatGray)
+            }
             Spacer(Modifier.height(6.dp))
             val chips = buildList {
                 p.per?.let { add("PE ${fmt1(it)}") }
@@ -182,6 +192,17 @@ fun ErrorBox(msg: String, onRetry: () -> Unit) {
         Text("⚠ 加载失败: $msg", color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(8.dp))
         Button(onClick = onRetry) { Text("重试") }
+    }
+}
+
+@Composable
+fun LevelLbl(label: String, v1: Double?, v2: Double?) {
+    if (v1 == null) return
+    fun fv(v: Double) = if (v >= 1000) fmt(v) else fmt1(v)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("$label ", fontSize = 11.sp, color = FlatGray)
+        Text(fv(v1) + (if (v2 != null) "→" + fv(v2) else ""),
+            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = AccentGold)
     }
 }
 

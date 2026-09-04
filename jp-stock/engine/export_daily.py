@@ -12,6 +12,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scoring as sc
 import recommend as rec
+import fetch_prices as fp
+import advice
 
 
 def load_hist_series():
@@ -253,6 +255,24 @@ def main():
         }
         d["pitch"] = build_pitch(d)
         d["pitch_ja"] = build_pitch_ja(d)
+
+        # actionable levels (buy zone / stop / targets) from recent ~90 bars
+        px_now = d.get("price")
+        if px_now:
+            cq = fp.db_conn()
+            try:
+                rr = cq.execute(
+                    "SELECT high, low FROM daily WHERE code=? AND close IS NOT NULL "
+                    "ORDER BY ts DESC LIMIT 90", (code,)
+                ).fetchall()
+            finally:
+                cq.close()
+            if rr:
+                act = advice.compute_action(
+                    [{"h": h, "l": l} for h, l in reversed(rr)], px_now)
+                if act:
+                    d["action"] = {k: act[k] for k in
+                                   ("buy_low", "buy_high", "stop", "t1", "t2", "watch")}
         out["picks"].append(d)
     out["strategy"] = (
         "从东证Prime全池按【低估值(历史分位) + 高盈利质量(ROE) + 股息 + 趋势过滤】"

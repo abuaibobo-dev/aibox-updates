@@ -25,6 +25,11 @@ data class Pick(
     val tags: List<String> = emptyList(),
     val pitch: String = "",
     val pitchJa: String = "",
+    val buyLow: Double? = null,
+    val buyHigh: Double? = null,
+    val stop: Double? = null,
+    val t1: Double? = null,
+    val t2: Double? = null,
 )
 
 data class DailyFeed(val strategy: String, val picks: List<Pick>)
@@ -135,6 +140,11 @@ object Api {
                 tags = tags,
                 pitch = p.optString("pitch"),
                 pitchJa = p.optString("pitch_ja"),
+                buyLow = p.optJSONObject("action")?.optDouble("buy_low"),
+                buyHigh = p.optJSONObject("action")?.optDouble("buy_high"),
+                stop = p.optJSONObject("action")?.optDouble("stop"),
+                t1 = p.optJSONObject("action")?.optDouble("t1"),
+                t2 = p.optJSONObject("action")?.optDouble("t2"),
             )
         }
         DailyFeed(obj.optString("strategy"), picks)
