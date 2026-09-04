@@ -20,9 +20,26 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run daily pipeline
+      # market.sqlite holds 10y OHLCV + live fundamentals. Caching it makes the
+      # daily run incremental (seconds) instead of re-fetching everything.
+      - name: Restore market.sqlite cache
+        id: cache-restore
+        uses: actions/cache@v4
+        with:
+          path: jp-stock/data/market.sqlite
+          key: jpmarket-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            jpmarket-${{ runner.os }}-
+
+      - name: Run daily pipeline (incremental when cache restored)
         working-directory: jp-stock/engine
         run: python3 run_daily.py
+
+      - name: Save market.sqlite cache
+        uses: actions/cache@v4
+        with:
+          path: jp-stock/data/market.sqlite
+          key: jpmarket-${{ runner.os }}-${{ github.run_id }}
 
       - name: Commit data files
         run: |

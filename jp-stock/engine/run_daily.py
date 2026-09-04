@@ -57,10 +57,17 @@ def main():
     print(f"tech-eligible={len(tech)} fetching live fundamentals for top {len(cands)}",
           file=sys.stderr)
     if cands:
-        run([sys.executable, "fetch_fundamentals.py"] + cands)
+        # --only-missing: with a cached DB this refreshes just new entrants;
+        # from an empty DB it fetches all 300.
+        run([sys.executable, "fetch_fundamentals.py", "--only-missing"] + cands)
     run([sys.executable, "export_daily.py"])
     run([sys.executable, "fetch_market.py"])
     run([sys.executable, "history.py"])
+    # checkpoint WAL so the whole DB lives in the single .sqlite file (cache-safe)
+    import sqlite3
+    c = sqlite3.connect(str(ROOT / "data" / "market.sqlite"))
+    c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    c.close()
     print("\ndaily.json + market.json + history.json ready", file=sys.stderr)
 
 

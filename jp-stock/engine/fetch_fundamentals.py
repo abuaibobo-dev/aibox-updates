@@ -112,10 +112,17 @@ def store(row):
 
 
 def main():
-    codes = sys.argv[1:] or [
+    args = sys.argv[1:]
+    only_missing = "--only-missing" in args
+    codes = [a for a in args if a != "--only-missing"] or [
         l.split(",")[0] for l in (ROOT / "data" / "prime.csv").read_text(encoding="utf-8").splitlines() if l.strip()
     ]
     init_db()
+    if only_missing:
+        with db_conn() as c:
+            have = {r[0] for r in c.execute("SELECT code FROM fundamentals")}
+        codes = [x for x in codes if x not in have]
+        print(f"only-missing: {len(codes)} to fetch", file=sys.stderr)
     ok = fail = 0
     for code in codes:
         try:
