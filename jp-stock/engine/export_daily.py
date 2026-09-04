@@ -155,6 +155,56 @@ def build_pitch(d):
     return lead + body + tail
 
 
+def build_pitch_ja(d):
+    """Japanese client-facing rationale (polite です/ます register)."""
+    nm = d.get("name", d.get("code", ""))
+    ind = d.get("industry", "")
+    price = d.get("price")
+    roe = d.get("roe")
+    per = d.get("per")
+    pp = d.get("pbr_pct")
+    dy = d.get("div_yield")
+    m12 = d.get("m12")
+    dd = d.get("dd")
+
+    out = [f"【{ind}】{nm}（{d.get('code')}）"]
+    out.append(f"株価：{price:,.0f}円" if price else f"コード：{d.get('code')}")
+    out.append("")
+    out.append("＜選定ポイント＞")
+    pts = []
+    if per is not None and 0 < per <= 15:
+        pts.append(f"PER約{per:.1f}倍と、利益に対して割安な水準")
+    elif per is not None and per <= 25:
+        pts.append(f"PER約{per:.1f}倍と妥当な水準")
+    if roe is not None and roe >= 15:
+        pts.append(f"ROE{roe:.1f}％と収益性が高い")
+    elif roe is not None and roe >= 10:
+        pts.append(f"ROE{roe:.1f}％と収益性は安定")
+    if pp is not None and pp <= 30 and d.get("pbr"):
+        pts.append(f"PBRは過去{pp:.0f}％分位と、自身の歴史では割安圏")
+    if dy is not None and dy >= 2.5:
+        pts.append(f"配当利回り約{dy:.1f}％")
+    if m12 is not None and m12 >= 0.2:
+        pts.append(f"直近1年で+{m12*100:.0f}％と上昇基調")
+    for p in (pts or ["総合スコアが東証プライム全体で上位"]):
+        out.append(f"・{p}")
+    out.append("")
+    out.append("＜留意点＞")
+    risks = []
+    if per is not None and per > 25:
+        risks.append("バリュエーションがやや割高な領域")
+    if dd is not None and dd <= -0.15:
+        risks.append("株価は高値圏から調整中の局面")
+    if dy is not None and dy < 1.0:
+        risks.append("配当水準は限定的")
+    for r in (risks or ["業績や市況の変動リスク"]):
+        out.append(f"・{r}")
+    out.append("")
+    out.append("※本内容は情報提供を目的とした分析資料であり、投資勧誘を目的とするものでは"
+               "ありません。最終的な投資判断はお客様ご自身でお願いいたします。")
+    return "\n".join(out)
+
+
 def main():
     jp_meta = load_jp_meta()
     hist = load_hist_series()
@@ -202,6 +252,7 @@ def main():
             "reason_ja": rec.reason_ja(code, jname, s),
         }
         d["pitch"] = build_pitch(d)
+        d["pitch_ja"] = build_pitch_ja(d)
         out["picks"].append(d)
     out["strategy"] = (
         "从东证Prime全池按【低估值(历史分位) + 高盈利质量(ROE) + 股息 + 趋势过滤】"

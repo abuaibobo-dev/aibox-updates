@@ -14,11 +14,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Builds a shareable text for one pick (defaults to Japanese blurb). */
+/** Builds the text to send a client: Japanese rationale first. */
 fun buildShareText(p: Pick): String {
-    if (p.pitch.isNotBlank()) {
-        return p.pitch  // client-facing Chinese buy case
-    }
+    if (p.pitchJa.isNotBlank()) return p.pitchJa  // client-facing Japanese
+    if (p.pitch.isNotBlank()) return p.pitch      // Chinese fallback
     val ja = if (p.reasonJa.isNotBlank()) p.reasonJa else {
         "【日株ピック】${p.name}(${p.code}) ¥${fmt(p.price)} スコア${fmt1(p.score)}\n" +
             p.reason + "\n※投資助言ではありません。"
@@ -64,21 +63,28 @@ fun shareToJapanPlatforms(context: Context, text: String) {
 
 @Composable
 fun ShareRow(p: Pick, context: Context) {
-    Row(
+    val clipboard = LocalClipboardManager.current
+    Column(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("分享 ", fontSize = 13.sp, color = FlatGray)
-        TextButton(onClick = { shareToJapanPlatforms(context, buildShareText(p)) }) {
-            Text("X · LINE · Facebook", fontSize = 13.sp)
+        Row(horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = { clipboard.setText(AnnotatedString(buildShareText(p))) }) {
+                Text("复制日文荐股文 · 发给客户", fontSize = 13.sp)
+            }
+            Spacer(Modifier.width(6.dp))
+            TextButton(onClick = { shareToJapanPlatforms(context, buildShareText(p)) }) {
+                Text("分享 X · LINE", fontSize = 13.sp)
+            }
         }
         if (p.pitch.isNotBlank()) {
-            val clipboard = LocalClipboardManager.current
-            OutlinedButton(onClick = {
-                clipboard.setText(AnnotatedString(buildShareText(p)))
-            }) {
-                Text("复制购买理由", fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.Center) {
+                Text("中文自用: ", fontSize = 12.sp, color = FlatGray)
+                TextButton(onClick = { clipboard.setText(AnnotatedString(p.pitch)) }) {
+                    Text("复制中文理由", fontSize = 12.sp)
+                }
             }
         }
     }
