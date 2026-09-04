@@ -191,7 +191,7 @@ object Api {
         if (o.has(k) && !o.isNull(k)) o.getDouble(k) else null
 
     /** Ask the local analysis backend for one stock's full parse + AI note. */
-    fun fetchAnalysis(code: String): AnalysisData = withContext(Dispatchers.IO) {
+    suspend fun fetchAnalysis(code: String): AnalysisData = withContext(Dispatchers.IO) {
         val url = "$ANALYSIS_BASE/analyze?code=$code"
         val req = Request.Builder().url(url).build()
         val txt = client.newCall(req).execute().use { resp ->
