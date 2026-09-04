@@ -28,91 +28,77 @@ fun generateAdviseCard(context: Context, p: Pick): Uri? {
     val textW = w - pad * 2
 
     val bg = Paint().apply { color = 0xFF101318.toInt() }
-    val white = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFF2F4F7.toInt(); textSize = 40f
-    }
-    val gray = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF9AA3AD.toInt(); textSize = 30f
-    }
-    val small = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF8A929C.toInt(); textSize = 26f
-    }
-    val gold = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFD9B24A.toInt(); textSize = 40f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-    }
-    val head = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFFFFF.toInt(); textSize = 56f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-    }
-    val accent = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF63A8FF.toInt(); textSize = 34f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-    }
 
-    val body = p.pitchJa
+    fun tp(size: Float, color: Int, bold: Boolean = false) =
+        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color; textSize = size
+            if (bold) typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+
+    val smallC = 0xFF9AA3AD.toInt()
+    val goldC = 0xFFD9B24A.toInt()
+    val blueC = 0xFF63A8FF.toInt()
+    val whiteC = 0xFFF4F6F9.toInt()
+    val textC = 0xFFD7DDE3.toInt()
+    val footC = 0xFF6E7681.toInt()
+
     fun fv(v: Double?) = when {
         v == null -> ""
         v >= 1000 -> String.format(Locale.US, "%,.0f", v)
         else -> String.format(Locale.US, "%.1f", v)
     }
 
-    // estimate height: header zone + action rows + wrapped body
-    val estBody = StaticLayout.Builder.obtain(body, 0, body.length, small, textW)
-        .setAlignment(Layout.Alignment.ALIGN_NORMAL).build()
-    val h = 420 + 90 * 3 + estBody.height + 260
+    val date = SimpleDateFormat("yyyy/MM/dd", Locale.US).format(Date())
+
+    // ---- build text blocks: (paint, text) ----
+    val blocks = ArrayList<Pair<TextPaint, String>>()
+    blocks.add(tp(28f, smallC) to "JPStock ・ 銘柄カード（$date）")
+    blocks.add(tp(56f, whiteC, bold = true) to "${p.name}　（${p.code}）")
+    blocks.add(tp(30f, smallC) to (p.industry ?: ""))
+    blocks.add(tp(44f, goldC, bold = true) to "現在値 ${fv(p.price)}円")
+    blocks.add(tp(2f, 0) to "")  // spacer
+    fun actionBlock(label: String, v1: Double?, v2: Double?) {
+        if (v1 == null) return
+        val vv = fv(v1) + (if (v2 != null) " 〜 " + fv(v2) else "")
+        blocks.add(tp(36f, blueC, bold = true) to "$label ")
+        // append value onto same paint won't recolor; draw as separate line instead
+        blocks.add(tp(36f, whiteC) to vv)
+    }
+    actionBlock("買い目安", p.buyLow, p.buyHigh)
+    actionBlock("損切り", p.stop, null)
+    actionBlock("利確目標", p.t1, p.t2)
+    blocks.add(tp(2f, 0) to "")
+    blocks.add(tp(32f, textC) to (p.pitchJa ?: ""))
+    blocks.add(tp(2f, 0) to "")
+    blocks.add(tp(24f, footC) to "JPStock — 分析情報提供資料（投資判断はお客様自身で）")
+
+    // ---- measure total height (two-pass) ----
+    val layouts = ArrayList<StaticLayout>()
+    var total = pad * 2f
+    for ((pt, txt) in blocks) {
+        val sl = StaticLayout.Builder.obtain(txt, 0, txt.length, pt, textW)
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setLineSpacing(0f, 1.28f)
+            .setIncludePad(false)
+            .build()
+        layouts.add(sl)
+        total += sl.height + 18f   // inter-block gap
+    }
+    val h = (total + 30).toInt()
 
     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     val c = Canvas(bmp)
     c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), bg)
 
-    var y = pad + 20f
-    fun line(text: String, tp: TextPaint) {
-        val sl = StaticLayout.Builder.obtain(text, 0, text.length, tp, textW)
-            .setAlignment(Layout.Alignment.ALIGN_NORMAL).build()
-        c.save(); c.translate(pad.toFloat(), y); sl.draw(c); c.restore()
-        y += sl.height + 8f
-    }
-
-    val date = SimpleDateFormat("yyyy/MM/dd", Locale.US).format(Date())
-    line("JPStock ・ 銘柄カード（$date）", small)
-    y += 6f
-    line("${p.name}　（${p.code}）", head)
-    line(p.industry ?: "", small)
-    y += 4f
-    line("現在値 ${fv(p.price)}円", gold)
-    y += 8f
-
-    // action rows
-    fun actionRow(label: String, v1: Double?, v2: Double?) {
-        if (v1 == null) return
-        val t = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFF2F4F7.toInt(); textSize = 34f
-        }
-        val lab = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF63A8FF.toInt(); textSize = 34f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-        }
-        c.save(); c.translate(pad.toFloat(), y)
-        c.drawText("$label ", 0f, 0f, lab)
-        c.drawText(fv(v1) + (if (v2 != null) " 〜 " + fv(v2) else ""),
-            lab.measureText("$label ") + 12f, 0f, t)
+    var y = pad.toFloat()
+    for (i in blocks.indices) {
+        val sl = layouts[i]
+        c.save()
+        c.translate(pad.toFloat(), y)
+        sl.draw(c)
         c.restore()
-        y += 48f
+        y += sl.height + 18f
     }
-    actionRow("買い目安", p.buyLow, p.buyHigh)
-    actionRow("損切り", p.stop, null)
-    actionRow("利確目標", p.t1, p.t2)
-    y += 10f
-
-    // body (pitchJa) starting from its own first line
-    val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFD7DDE3.toInt(); textSize = 32f
-    }
-    val sl = StaticLayout.Builder.obtain(body, 0, body.length, bodyPaint, textW)
-        .setAlignment(Layout.Alignment.ALIGN_NORMAL).build()
-    c.save(); c.translate(pad.toFloat(), y); sl.draw(c); c.restore()
-    y += sl.height + 24f
-    c.drawText("JPStock — 分析情報提供資料（投資判断はお客様自身で）",
-        pad.toFloat(), y, TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF6E7681.toInt(); textSize = 24f
-        })
 
     val ok = saveCard(context, bmp, p.code)
     return ok
