@@ -83,9 +83,22 @@ fun PickDetailScreen(p: Pick, onBack: () -> Unit) {
                     IndicatorPanel(ind, p)
                     Spacer(Modifier.height(10.dp))
 
+                    if (p.aiReason.isNotBlank()) {
+                        Card(Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = AccentBlue.copy(alpha = 0.10f))) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text("AI 解读", fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                                    color = AccentBlue)
+                                Spacer(Modifier.height(4.dp))
+                                Text(p.aiReason, fontSize = 13.sp)
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardDark)) {
                         Column(Modifier.padding(12.dp)) {
-                            Text("分析理由", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("量化评分", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                             Spacer(Modifier.height(4.dp))
                             Text(p.reason, fontSize = 13.sp)
                         }

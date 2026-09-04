@@ -17,6 +17,7 @@ data class Pick(
     val perPct: Double?, val pbrPct: Double?,
     val m6: Double?, val m12: Double?, val reason: String,
     val reasonJa: String = "",
+    val aiReason: String = "",
 )
 
 data class IndexQuote(
@@ -82,6 +83,7 @@ object Api {
                 pbrPct = nullable(p, "pbr_pct"),
                 reason = p.optString("reason"),
                 reasonJa = p.optString("reason_ja"),
+                aiReason = p.optString("ai_reason"),
             )
         }
     }

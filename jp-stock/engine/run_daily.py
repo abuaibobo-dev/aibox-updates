@@ -12,6 +12,7 @@ Steps:
   4. fetch_fundamentals.py <candidates>      (irbank, serial ~1s each)
   5. export_daily.py     -> data/daily.json  (the App feed)
 """
+import os
 import subprocess
 import sys
 import time
@@ -63,6 +64,9 @@ def main():
     run([sys.executable, "export_daily.py"])
     run([sys.executable, "fetch_market.py"])
     run([sys.executable, "history.py"])
+    # AI analyst notes (optional: only when a DeepSeek key is configured)
+    if os.environ.get("DEEPSEEK_API_KEY"):
+        run([sys.executable, "ai_explain.py"])
     # checkpoint WAL so the whole DB lives in the single .sqlite file (cache-safe)
     import sqlite3
     c = sqlite3.connect(str(ROOT / "data" / "market.sqlite"))
