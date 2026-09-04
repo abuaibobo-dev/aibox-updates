@@ -23,6 +23,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Api.setAnalysisBase(loadSavedBase(this))
         setContent {
             MaterialTheme(colorScheme = DarkColorScheme) {
                 AppRoot()
@@ -68,6 +69,12 @@ fun AppRoot() {
                     icon = {},
                     label = { Text("解析") },
                 )
+                NavigationBarItem(
+                    selected = tab == 4,
+                    onClick = { tab = 4 },
+                    icon = {},
+                    label = { Text("设置") },
+                )
             }
         }
     ) { pad ->
@@ -77,6 +84,7 @@ fun AppRoot() {
                 1 -> MarketScreen()
                 2 -> HistoryScreen()
                 3 -> AnalysisScreen()
+                4 -> SettingsScreen(onSaved = {})
             }
         }
     }

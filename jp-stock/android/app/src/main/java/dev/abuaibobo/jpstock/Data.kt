@@ -10,9 +10,9 @@ import java.util.concurrent.TimeUnit
 const val GITHUB_RAW =
     "https://raw.githubusercontent.com/abuaibobo-dev/aibox-updates/main/jp-stock/data"
 
-// Local analysis backend (server.py). Same device => localhost works; for a
-// separate phone, point this at the machine's LAN IP, e.g. http://192.168.1.5:8092
-const val ANALYSIS_BASE = "http://127.0.0.1:8092"
+// Default local analysis backend (server.py). Changeable in the app's
+// Settings screen; same device => localhost, separate phone => LAN IP.
+const val DEFAULT_BASE = "http://127.0.0.1:8092"
 
 data class Pick(
     val code: String, val name: String, val industry: String,
@@ -72,6 +72,14 @@ data class HistoryFeed(
 data class HistoryDay(val date: String, val picks: List<TrackedPick>)
 
 object Api {
+    @Volatile
+    var analysisBase: String = DEFAULT_BASE
+        private set
+
+    fun setAnalysisBase(url: String) {
+        analysisBase = url.trim().trimEnd('/')
+    }
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -140,7 +148,7 @@ object Api {
     /** Real-time indices from local backend; null when backend unreachable. */
     suspend fun fetchLiveIndices(): List<IndexQuote>? = withContext(Dispatchers.IO) {
         try {
-            val o = JSONObject(getText("$ANALYSIS_BASE/market"))
+            val o = JSONObject(getText("$analysisBase/market"))
             val ivals = o.getJSONArray("indices")
             (0 until ivals.length()).map { i ->
                 val x = ivals.getJSONObject(i)
@@ -175,6 +183,20 @@ object Api {
             HistoryDay(d.optString("date"), picks)
         }
         HistoryFeed(obj.optString("updated"), days)
+    }
+
+    /** Fast backend reachability probe (4s budget). */
+    suspend fun testConnection(): Boolean = withContext(Dispatchers.IO) {
+        val quick = OkHttpClient.Builder()
+            .connectTimeout(3, TimeUnit.SECONDS)
+            .readTimeout(4, TimeUnit.SECONDS)
+            .build()
+        try {
+            val req = Request.Builder().url("$analysisBase/health").build()
+            quick.newCall(req).execute().use { it.isSuccessful }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /** Candles straight from Yahoo v8 chart API (no auth needed). */
@@ -220,7 +242,7 @@ object Api {
 
     /** Ask the local analysis backend for one stock's full parse + AI note. */
     suspend fun fetchAnalysis(code: String): AnalysisData = withContext(Dispatchers.IO) {
-        val url = "$ANALYSIS_BASE/analyze?code=$code"
+        val url = "$analysisBase/analyze?code=$code"
         val req = Request.Builder().url(url).build()
         val txt = client.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) {
