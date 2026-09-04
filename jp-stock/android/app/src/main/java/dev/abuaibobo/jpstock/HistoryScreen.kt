@@ -31,7 +31,7 @@ fun HistoryScreen() {
 
     when {
         loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-        error != null -> ErrorBox(error!!, load)
+        error != null -> ErrorBox(error!!) { load() }
         feed != null -> LazyColumn(
             Modifier.fillMaxSize().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -39,7 +39,7 @@ fun HistoryScreen() {
             item {
                 Text("推荐跟踪", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text("回看每日推荐后的市场表现 (截至 ${feed!!.updated.take(10)})",
-                    fontSize = 12.sp, color = Color.Gray)
+                    fontSize = 12.sp, color = FlatGray)
             }
             items(feed!!.days) { day ->
                 HistoryDayCard(day)
@@ -57,13 +57,13 @@ fun HistoryDayCard(day: HistoryDay) {
             day.picks.forEach { p ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                     Text("${p.code} ${p.name}", Modifier.weight(1f), fontSize = 13.sp)
-                    Text("¥${fmt(p.price)}", fontSize = 13.sp, color = Color.Gray,
+                    Text("¥${fmt(p.price)}", fontSize = 13.sp, color = FlatGray,
                         modifier = Modifier.padding(end = 10.dp))
                     p.retPct?.let { r ->
                         Text(if (r >= 0) "▲ +${fmt1(r)}%" else "▼ ${fmt1(r)}%",
                             fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                            color = if (r >= 0) Color(0xFFE53935) else Color(0xFF1E88E5))
-                    } ?: Text("—", fontSize = 13.sp, color = Color.Gray)
+                            color = if (r >= 0) UpRed else DownBlue)
+                    } ?: Text("—", fontSize = 13.sp, color = FlatGray)
                 }
             }
         }

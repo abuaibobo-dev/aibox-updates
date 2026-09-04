@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = lightColorScheme()) {
+            MaterialTheme(colorScheme = DarkColorScheme) {
                 AppRoot()
             }
         }
@@ -92,11 +92,11 @@ fun PicksScreen(onPick: (Pick) -> Unit) {
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text("日本股市 每日推荐", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("量化多因子 · 行业分散 · 非投资建议", fontSize = 12.sp, color = Color.Gray)
+        Text("量化多因子 · 行业分散 · 非投资建议", fontSize = 12.sp, color = FlatGray)
         Spacer(Modifier.height(10.dp))
         when {
             loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-            error != null -> ErrorBox(error!!, load)
+            error != null -> ErrorBox(error!!) { load() }
             picks != null -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(picks!!, key = { it.code }) { p ->
                     PickCard(p, onClick = { onPick(p) })
@@ -115,7 +115,7 @@ fun PickCard(p: Pick, onClick: () -> Unit) {
                 Text("${p.code}  ${p.name}", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 Text("¥${fmt(p.price)}", fontWeight = FontWeight.Bold)
             }
-            Text("${p.industry} · 综合分 ${fmt1(p.score)}", fontSize = 12.sp, color = Color.Gray)
+            Text("${p.industry} · 综合分 ${fmt1(p.score)}", fontSize = 12.sp, color = FlatGray)
             Spacer(Modifier.height(6.dp))
             val chips = buildList {
                 p.per?.let { add("PE ${fmt1(it)}") }
@@ -127,9 +127,9 @@ fun PickCard(p: Pick, onClick: () -> Unit) {
             }
             Text(chips.joinToString("  ·  "), fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
-            Text(p.reason, fontSize = 13.sp, color = Color.DarkGray)
+            Text(p.reason, fontSize = 13.sp, color = TextSecondary)
             Spacer(Modifier.height(4.dp))
-            Text("点按查看走势 →", fontSize = 12.sp, color = Color(0xFF1565C0))
+            Text("点按查看走势 →", fontSize = 12.sp, color = AccentBlue)
         }
     }
 }

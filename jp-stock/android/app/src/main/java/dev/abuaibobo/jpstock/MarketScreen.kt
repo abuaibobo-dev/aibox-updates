@@ -31,18 +31,18 @@ fun MarketScreen() {
 
     when {
         loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-        error != null -> ErrorBox(error!!, load)
+        error != null -> ErrorBox(error!!) { load() }
         feed != null -> LazyColumn(
             Modifier.fillMaxSize().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
                 Text("日本股市 大盘概览", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("数据日期: ${feed!!.date}", fontSize = 12.sp, color = Color.Gray)
+                Text("数据日期: ${feed!!.date}", fontSize = 12.sp, color = FlatGray)
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    feed!!.indices.forEach { IndexCard(it) }
+                    feed!!.indices.forEach { IndexCard(it, Modifier.weight(1f)) }
                 }
             }
             item {
@@ -57,18 +57,18 @@ fun MarketScreen() {
 }
 
 @Composable
-fun IndexCard(ix: IndexQuote) {
-    Card(Modifier.weight(1f)) {
+fun IndexCard(ix: IndexQuote, modifier: Modifier = Modifier) {
+    Card(modifier) {
         Column(Modifier.padding(12.dp)) {
-            Text(ix.name, fontSize = 13.sp, color = Color.Gray)
+            Text(ix.name, fontSize = 13.sp, color = FlatGray)
             Text(fmt(ix.last), fontSize = 18.sp, fontWeight = FontWeight.Bold)
             ix.chgDay?.let {
                 Text(pct(it / 100), fontSize = 14.sp,
-                    color = if (it >= 0) Color(0xFFE53935) else Color(0xFF1E88E5),
+                    color = if (it >= 0) UpRed else DownBlue,
                     fontWeight = FontWeight.SemiBold)
             }
             ix.chg5d?.let {
-                Text("5日 ${pct(it / 100)}", fontSize = 11.sp, color = Color.Gray)
+                Text("5日 ${pct(it / 100)}", fontSize = 11.sp, color = FlatGray)
             }
         }
     }
@@ -78,9 +78,9 @@ fun IndexCard(ix: IndexQuote) {
 fun SectorRow(s: Sector) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(s.name, Modifier.weight(1f), fontSize = 14.sp)
-        Text("${s.count}只", fontSize = 12.sp, color = Color.Gray,
+        Text("${s.count}只", fontSize = 12.sp, color = FlatGray,
             modifier = Modifier.padding(end = 12.dp))
         Text(pct(s.chgDay / 100), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-            color = if (s.chgDay >= 0) Color(0xFFE53935) else Color(0xFF1E88E5))
+            color = if (s.chgDay >= 0) UpRed else DownBlue)
     }
 }

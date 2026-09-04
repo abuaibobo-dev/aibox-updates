@@ -64,7 +64,7 @@ fun ShareRow(p: Pick, context: Context) {
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("分享 ", fontSize = 13.sp, color = Color.Gray)
+        Text("分享 ", fontSize = 13.sp, color = FlatGray)
         TextButton(onClick = { shareToJapanPlatforms(context, buildShareText(p)) }) {
             Text("X · LINE · Facebook", fontSize = 13.sp)
         }
