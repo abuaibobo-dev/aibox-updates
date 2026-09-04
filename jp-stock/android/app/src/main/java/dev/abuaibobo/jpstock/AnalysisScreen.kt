@@ -16,8 +16,8 @@ import kotlinx.coroutines.launch
 
 /** Tab 3: type a 4-digit JP code -> real-time parse + AI note via local backend. */
 @Composable
-fun AnalysisScreen() {
-    var code by remember { mutableStateOf("") }
+fun AnalysisScreen(initialCode: String? = null) {
+    var code by remember { mutableStateOf(initialCode ?: "") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var result by remember { mutableStateOf<AnalysisData?>(null) }
@@ -30,6 +30,11 @@ fun AnalysisScreen() {
             catch (e: Exception) { error = e.message ?: "解析失败" }
             loading = false
         }
+    }
+
+    LaunchedEffect(initialCode) {
+        val c = initialCode
+        if (!c.isNullOrBlank()) run(c)
     }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {

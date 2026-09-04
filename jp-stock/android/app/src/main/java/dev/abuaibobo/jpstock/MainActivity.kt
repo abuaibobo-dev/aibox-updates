@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
 fun AppRoot() {
     var tab by remember { mutableStateOf(0) }
     var detail by remember { mutableStateOf<Pick?>(null) }
+    var analysisCode by remember { mutableStateOf<String?>(null) }
 
     if (detail != null) {
         PickDetailScreen(detail!!, onBack = { detail = null })
@@ -81,9 +82,11 @@ fun AppRoot() {
         Box(Modifier.padding(pad)) {
             when (tab) {
                 0 -> PicksScreen(onPick = { detail = it })
-                1 -> MarketScreen()
+                1 -> MarketScreen(onOpenCode = { c ->
+                    analysisCode = c; tab = 3
+                })
                 2 -> HistoryScreen()
-                3 -> AnalysisScreen()
+                3 -> AnalysisScreen(initialCode = analysisCode)
                 4 -> SettingsScreen(onSaved = {})
             }
         }

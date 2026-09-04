@@ -60,6 +60,14 @@ data class AnalysisData(
     val aiReason: String,
 )
 
+data class IndustryCat(val name: String, val count: Int)
+
+data class StockQuote(val code: String, val name: String, val industry: String,
+                      val price: Double, val chgPct: Double?)
+
+data class StockFeed(val total: Int, val industries: List<IndustryCat>,
+                     val stocks: List<StockQuote>)
+
 data class TrackedPick(
     val code: String, val name: String, val price: Double,
     val retPct: Double?, val score: Double, val date: String,
@@ -199,6 +207,24 @@ object Api {
         } catch (_: Exception) {
             false
         }
+    }
+
+    /** Full universe browse feed from local backend. */
+    suspend fun fetchStocks(): StockFeed = withContext(Dispatchers.IO) {
+        val o = JSONObject(getText("$analysisBase/stocks"))
+        val ia = o.getJSONArray("industries")
+        val industries = (0 until ia.length()).map { i ->
+            val x = ia.getJSONObject(i)
+            IndustryCat(x.optString("name"), x.optInt("count", 0))
+        }
+        val sa = o.getJSONArray("stocks")
+        val stocks = (0 until sa.length()).map { i ->
+            val s = sa.getJSONObject(i)
+            StockQuote(s.optString("code"), s.optString("name"),
+                s.optString("industry"), s.optDouble("price", 0.0),
+                nullable(s, "chg_pct"))
+        }
+        StockFeed(o.optInt("total", 0), industries, stocks)
     }
 
     /** Candles straight from Yahoo v8 chart API (no auth needed). */

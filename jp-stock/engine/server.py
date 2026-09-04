@@ -219,6 +219,45 @@ def _rsi(vals, period=14):
     return 100.0 - 100.0 / (1 + ag / al)
 
 
+def build_stocks():
+    """Full Prime universe with latest close + day change, for browse/search.
+    Reads prime.csv for JP names/industries and daily for the last two bars."""
+    import collections
+    conn = fp.db_conn()
+    rows = conn.execute(
+        """SELECT d.code, d.close,
+                  (SELECT c2.close FROM daily c2
+                   WHERE c2.code=d.code AND c2.ts<d.ts AND c2.close IS NOT NULL
+                   ORDER BY c2.ts DESC LIMIT 1)
+           FROM daily d
+           WHERE d.ts=(SELECT MAX(ts) FROM daily WHERE code=d.code)
+             AND d.close IS NOT NULL"""
+    ).fetchall()
+    conn.close()
+    meta = {}
+    csvf = ROOT / "data" / "prime.csv"
+    if csvf.exists():
+        for line in csvf.read_text(encoding="utf-8").splitlines():
+            parts = line.split(",")
+            if len(parts) >= 3:
+                meta[parts[0]] = (parts[1], parts[2])
+    ind_count = collections.Counter()
+    stocks = []
+    for code, close, prev in rows:
+        nm, ind = meta.get(code, (f"{code}", ""))
+        chg = ((close / prev - 1.0) * 100) if (prev and close) else None
+        ind_count[ind] += 1
+        stocks.append({"code": code, "name": nm, "industry": ind,
+                       "price": close, "chg_pct": round(chg, 2) if chg is not None else None})
+    industries = [{"name": n, "count": c}
+                  for n, c in ind_count.most_common() if n]
+    stocks.sort(key=lambda s: (s["industry"], s["code"]))
+    return {"date": time.strftime("%Y-%m-%d"),
+            "total": len(stocks),
+            "industries": industries,
+            "stocks": stocks}
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, payload):
         body = json.dumps(payload, ensure_ascii=False).encode()
@@ -270,6 +309,22 @@ class Handler(BaseHTTPRequestHandler):
                 "generated": time.strftime("%H:%M:%S UTC"),
                 "indices": indices,
             })
+            return
+        if parsed.path == "/stocks":
+            payload = build_stocks()
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            ind = (q.get("industry") or [""])[0].strip()
+            term = (q.get("q") or [""])[0].strip().lower()
+            if ind or term:
+                st = payload["stocks"]
+                if ind:
+                    st = [s for s in st if s["industry"] == ind]
+                if term:
+                    st = [s for s in st if term in s["code"].lower()
+                          or term in s["name"].lower()]
+                payload["stocks"] = st
+                payload["total"] = len(st)
+            self._send(200, payload)
             return
         self._send(404, {"error": "not found"})
 

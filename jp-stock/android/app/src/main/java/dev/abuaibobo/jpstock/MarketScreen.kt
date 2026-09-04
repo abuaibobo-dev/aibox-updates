@@ -1,7 +1,9 @@
 package dev.abuaibobo.jpstock
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,7 +16,25 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 @Composable
-fun MarketScreen() {
+fun MarketScreen(onOpenCode: (String) -> Unit = {}) {
+    var view by remember { mutableStateOf(0) }  // 0 sectors, 1 stocks
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = view == 0, onClick = { view = 0 },
+                label = { Text("板块涨跌") })
+            FilterChip(selected = view == 1, onClick = { view = 1 },
+                label = { Text("全部股票") })
+        }
+        when (view) {
+            0 -> SectorView()
+            1 -> StockView(onOpenCode)
+        }
+    }
+}
+
+@Composable
+fun SectorView() {
     var feed by remember { mutableStateOf<MarketFeed?>(null) }
     var liveIndices by remember { mutableStateOf<List<IndexQuote>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -25,7 +45,6 @@ fun MarketScreen() {
             loading = true; error = null
             try { feed = Api.fetchMarket() }
             catch (e: Exception) { error = e.message ?: "加载失败" }
-            // best-effort live indices from local backend (fast fail if absent)
             liveIndices = try { Api.fetchLiveIndices() } catch (_: Exception) { null }
             loading = false
         }
@@ -53,19 +72,18 @@ fun MarketScreen() {
                 }
             }
             item {
-                Text("行业涨跌 (33个)", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text("行业涨跌 (${feed!!.sectors.size}个)", fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp)
                 Spacer(Modifier.height(4.dp))
             }
-            items(feed!!.sectors) { s ->
-                SectorRow(s)
-            }
+            items(feed!!.sectors) { s -> SectorRow(s) }
         }
     }
 }
 
 @Composable
 fun IndexCard(ix: IndexQuote, modifier: Modifier = Modifier) {
-    Card(modifier) {
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = CardDark)) {
         Column(Modifier.padding(12.dp)) {
             Text(ix.name, fontSize = 13.sp, color = FlatGray)
             Text(fmt(ix.last), fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -74,9 +92,7 @@ fun IndexCard(ix: IndexQuote, modifier: Modifier = Modifier) {
                     color = if (it >= 0) UpRed else DownBlue,
                     fontWeight = FontWeight.SemiBold)
             }
-            ix.chg5d?.let {
-                Text("5日 ${pct(it / 100)}", fontSize = 11.sp, color = FlatGray)
-            }
+            ix.chg5d?.let { Text("5日 ${pct(it / 100)}", fontSize = 11.sp, color = FlatGray) }
         }
     }
 }
@@ -90,4 +106,80 @@ fun SectorRow(s: Sector) {
         Text(pct(s.chgDay / 100), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
             color = if (s.chgDay >= 0) UpRed else DownBlue)
     }
+}
+
+/** Browse all Prime stocks: industry filter chips + searchable, tappable list. */
+@Composable
+fun StockView(onOpenCode: (String) -> Unit) {
+    var feed by remember { mutableStateOf<StockFeed?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var selInd by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    fun load() {
+        scope.launch {
+            loading = true; error = null
+            try { feed = Api.fetchStocks() }
+            catch (e: Exception) { error = e.message ?: "加载失败(需启动后端)" }
+            loading = false
+        }
+    }
+    LaunchedEffect(Unit) { load() }
+
+    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+        Text("全部股票 (${feed?.total ?: 0}只)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text("搜索代码/名称…", fontSize = 13.sp) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        when {
+            loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+            error != null -> ErrorBox(error!!) { load() }
+            feed != null -> {
+                LazyRow(Modifier.fillMaxWidth()) {
+                    item { IndustryChip("全部", selInd == "", { selInd = "" }) }
+                    items(feed!!.industries) { c ->
+                        IndustryChip(c.name, selInd == c.name, { selInd = c.name })
+                    }
+                }
+                val shown = feed!!.stocks.filter {
+                    (selInd.isEmpty() || it.industry == selInd) &&
+                        (query.isBlank() || it.code.contains(query) ||
+                            it.name.contains(query, ignoreCase = true))
+                }
+                Spacer(Modifier.height(4.dp))
+                LazyColumn(Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    items(shown) { q -> StockRow(q) { onOpenCode(q.code) } }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun IndustryChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label, fontSize = 13.sp) })
+}
+
+@Composable
+fun StockRow(q: StockQuote, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick)
+        .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("${q.code} ${q.name}", fontSize = 14.sp)
+            Text(q.industry, fontSize = 11.sp, color = FlatGray)
+        }
+        Text("¥${fmt(q.price)}", fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(end = 12.dp))
+        q.chgPct?.let {
+            Text(pct(it / 100), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                color = if (it >= 0) UpRed else DownBlue)
+        }
+    }
+    HorizontalDivider(color = BorderDark)
 }
