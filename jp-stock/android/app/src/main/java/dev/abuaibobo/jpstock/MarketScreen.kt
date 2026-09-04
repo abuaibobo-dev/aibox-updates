@@ -101,7 +101,6 @@ fun IndexCard(ix: IndexQuote, modifier: Modifier = Modifier) {
 }
 
 @Composable
-@Composable
 fun SectorRow(s: Sector, onClick: () -> Unit = {}) {
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
