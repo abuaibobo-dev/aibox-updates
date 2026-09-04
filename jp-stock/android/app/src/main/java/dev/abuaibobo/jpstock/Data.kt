@@ -10,6 +10,10 @@ import java.util.concurrent.TimeUnit
 const val GITHUB_RAW =
     "https://raw.githubusercontent.com/abuaibobo-dev/aibox-updates/main/jp-stock/data"
 
+// Local analysis backend (server.py). Same device => localhost works; for a
+// separate phone, point this at the machine's LAN IP, e.g. http://192.168.1.5:8092
+const val ANALYSIS_BASE = "http://127.0.0.1:8092"
+
 data class Pick(
     val code: String, val name: String, val industry: String,
     val price: Double, val score: Double,
@@ -35,6 +39,22 @@ data class MarketFeed(
 
 data class KLine(val ts: Long, val open: Double, val high: Double,
                  val low: Double, val close: Double, val volume: Long)
+
+data class CandleBar(val ts: Long, val open: Double, val high: Double,
+                     val low: Double, val close: Double)
+
+data class AnalysisData(
+    val code: String, val name: String, val industry: String,
+    val price: Double, val score: Double,
+    val per: Double?, val pbr: Double?, val roe: Double?, val divYield: Double?,
+    val perPct: Double?, val pbrPct: Double?,
+    val m6: Double?, val m12: Double?, val dd: Double?,
+    val rsi: Double?, val macd: Double?, val macdSignal: Double?,
+    val macdHist: Double?, val bbPct: Double?,
+    val ma20: Double?, val ma60: Double?, val ma200: Double?,
+    val candles: List<CandleBar>,
+    val aiReason: String,
+)
 
 data class TrackedPick(
     val code: String, val name: String, val price: Double,
@@ -169,4 +189,47 @@ object Api {
 
     private fun nullable(o: JSONObject, k: String): Double? =
         if (o.has(k) && !o.isNull(k)) o.getDouble(k) else null
+
+    /** Ask the local analysis backend for one stock's full parse + AI note. */
+    fun fetchAnalysis(code: String): AnalysisData = withContext(Dispatchers.IO) {
+        val url = "$ANALYSIS_BASE/analyze?code=$code"
+        val req = Request.Builder().url(url).build()
+        val txt = client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                val body = resp.body?.string() ?: ""
+                val msg = try {
+                    JSONObject(body).optString("error", "HTTP ${resp.code}")
+                } catch (_: Exception) { "HTTP ${resp.code}" }
+                throw RuntimeException(msg)
+            }
+            resp.body!!.string()
+        }
+        val o = JSONObject(txt)
+        val arr = o.getJSONArray("candles")
+        val candles = (0 until arr.length()).map { i ->
+            val c = arr.getJSONObject(i)
+            CandleBar(c.getLong("t"), c.getDouble("o"), c.getDouble("h"),
+                c.getDouble("l"), c.getDouble("c"))
+        }
+        val ind = o.optJSONObject("indicators") ?: JSONObject()
+        fun d(oo: JSONObject, k: String): Double? =
+            if (oo.has(k) && !oo.isNull(k)) oo.getDouble(k) else null
+        AnalysisData(
+            code = o.optString("code"),
+            name = o.optString("name"),
+            industry = o.optString("industry"),
+            price = o.optDouble("price", 0.0),
+            score = o.optDouble("score", 0.0),
+            per = d(o, "per"), pbr = d(o, "pbr"),
+            roe = d(o, "roe"), divYield = d(o, "div_yield"),
+            perPct = d(o, "per_pct"), pbrPct = d(o, "pbr_pct"),
+            m6 = d(o, "m6"), m12 = d(o, "m12"), dd = d(o, "dd"),
+            rsi = d(ind, "rsi"), macd = d(ind, "macd"),
+            macdSignal = d(ind, "macd_signal"), macdHist = d(ind, "macd_hist"),
+            bbPct = d(ind, "bb_pct"),
+            ma20 = d(ind, "ma20"), ma60 = d(ind, "ma60"), ma200 = d(ind, "ma200"),
+            candles = candles,
+            aiReason = o.optString("ai_reason"),
+        )
+    }
 }

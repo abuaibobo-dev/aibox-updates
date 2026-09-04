@@ -61,6 +61,12 @@ fun AppRoot() {
                     icon = {},
                     label = { Text("跟踪") },
                 )
+                NavigationBarItem(
+                    selected = tab == 3,
+                    onClick = { tab = 3 },
+                    icon = {},
+                    label = { Text("解析") },
+                )
             }
         }
     ) { pad ->
@@ -69,6 +75,7 @@ fun AppRoot() {
                 0 -> PicksScreen(onPick = { detail = it })
                 1 -> MarketScreen()
                 2 -> HistoryScreen()
+                3 -> AnalysisScreen()
             }
         }
     }
