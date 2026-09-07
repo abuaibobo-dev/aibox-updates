@@ -77,8 +77,12 @@ class MainActivity : ComponentActivity() {
     val nodeText = prefs.getString(AuroraVpnService.KEY_NODE, "").orEmpty()
     val profile = remember(nodeText) { runCatching { SingBoxConfig.parse(nodeText) }.getOrNull() }
     LaunchedEffect(Unit) { while (true) { connected = prefs.getBoolean(AuroraVpnService.KEY_CONNECTED, false); status = prefs.getString(AuroraVpnService.KEY_STATUS, "未连接").orEmpty(); delay(700) } }
-    fun start() = activity.startForegroundService(Intent(activity, AuroraVpnService::class.java).setAction(AuroraVpnService.ACTION_CONNECT))
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { if (VpnService.prepare(activity) == null) start() }
+    fun start() = runCatching { activity.startForegroundService(Intent(activity, AuroraVpnService::class.java).setAction(AuroraVpnService.ACTION_CONNECT)) }
+        .onFailure { prefs.edit().putString(AuroraVpnService.KEY_STATUS, "启动失败：${it.message}").apply() }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK && VpnService.prepare(activity) == null) start()
+        else prefs.edit().putString(AuroraVpnService.KEY_STATUS, "VPN 授权被取消").apply()
+    }
     val infinite = rememberInfiniteTransition(label = "connect")
     val spin by infinite.animateFloat(0f, 360f, infiniteRepeatable(tween(if (connected) 2600 else 6200, easing = LinearEasing)), label = "spin")
     val pulse by infinite.animateFloat(.35f, .85f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "pulse")
@@ -105,7 +109,9 @@ class MainActivity : ComponentActivity() {
     var nodes by remember { mutableStateOf(NodeStore.load(prefs)) }; var showImport by remember { mutableStateOf(false) }; var message by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? -> uri?.let {
         BarcodeScanning.getClient().process(InputImage.fromFilePath(activity, it)).addOnSuccessListener { result ->
-            val imported = NodeImport.parseMany(result.mapNotNull { code -> code.rawValue }.joinToString("\n")); if (imported.isNotEmpty()) { nodes = NodeStore.merge(nodes, imported); NodeStore.save(prefs, nodes); message = "已导入 ${imported.size} 个节点" } else message = "没有识别到兼容节点"
+            val values = result.mapNotNull { code -> code.rawValue }
+            val imported = values.flatMap { NodeImport.parseMany(it) }
+            if (imported.isNotEmpty()) { nodes = NodeStore.merge(nodes, imported); NodeStore.save(prefs, nodes); prefs.edit().putString(AuroraVpnService.KEY_NODE, imported.first()).apply(); message = "已导入并选择 ${imported.size} 个节点" } else message = if (values.isEmpty()) "图片中没有识别到二维码" else "二维码已读取，但节点格式不兼容"
         }.addOnFailureListener { e -> message = "识别失败：${e.message}" }
     } }
     Column(Modifier.fillMaxSize().background(Void)) { Header("节点", "统一管理、识别与切换")
@@ -133,6 +139,14 @@ class MainActivity : ComponentActivity() {
 @Composable private fun SettingsRow(title: String, value: String) = ListItem(headlineContent = { Text(title) }, trailingContent = { Text(value, color = Muted) }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
 
 private object NodeStore { private const val SEP = "\n---ORVYN---\n"; fun load(prefs: android.content.SharedPreferences): List<String> = prefs.getString("node_library", "").orEmpty().split(SEP).filter { it.isNotBlank() }.ifEmpty { listOfNotNull(prefs.getString(AuroraVpnService.KEY_NODE, null)?.takeIf { it.isNotBlank() }) }; fun save(prefs: android.content.SharedPreferences, nodes: List<String>) { prefs.edit().putString("node_library", nodes.joinToString(SEP)).apply() }; fun merge(old: List<String>, fresh: List<String>) = (old + fresh).distinctBy { it.trim() } }
-private object NodeImport { private val schemes = Regex("(?i)(socks5h?|https?|ss|vmess|vless|trojan|hysteria2?|hy2|tuic|anytls|shadowtls|ssh|naive|snell|wireguard|wg)://[^\\s]+")
-    fun parseMany(input: String): List<String> { val direct = schemes.findAll(input.trim()).map { it.value }.toList(); if (direct.isNotEmpty()) return direct.filter { runCatching { SingBoxConfig.parse(it) }.isSuccess }; val decoded = runCatching { android.util.Base64.decode(input.trim().replace('-', '+').replace('_', '/'), android.util.Base64.DEFAULT).toString(Charsets.UTF_8) }.getOrNull() ?: return emptyList(); return schemes.findAll(decoded).map { it.value }.filter { runCatching { SingBoxConfig.parse(it) }.isSuccess }.toList() }
+private object NodeImport { private val schemes = Regex("(?i)(socks|socks5|socks5h|http|https|ss|vmess|vless|trojan|hysteria|hysteria2|hy2|tuic|anytls|shadowtls|ssh|naive|snell|wireguard|wg)://[^\\r\\n\\t ]+")
+    fun parseMany(input: String): List<String> {
+        val clean = input.trim().removePrefix("\uFEFF")
+        val direct = schemes.findAll(clean).map { it.value.trim() }.toList()
+        if (direct.isNotEmpty()) return direct.filter { runCatching { SingBoxConfig.parse(it) }.isSuccess }
+        val compact = clean.replace(Regex("\\s"), "").replace('-', '+').replace('_', '/')
+        val padded = compact + "=".repeat((4 - compact.length % 4) % 4)
+        val decoded = runCatching { android.util.Base64.decode(padded, android.util.Base64.DEFAULT).toString(Charsets.UTF_8) }.getOrNull() ?: return emptyList()
+        return schemes.findAll(decoded).map { it.value.trim() }.filter { runCatching { SingBoxConfig.parse(it) }.isSuccess }.toList()
+    }
 }

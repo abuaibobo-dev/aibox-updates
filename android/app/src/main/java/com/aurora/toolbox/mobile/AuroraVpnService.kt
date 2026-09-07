@@ -20,8 +20,10 @@ class AuroraVpnService : VpnService() {
             stopTunnel()
             return START_NOT_STICKY
         }
-        startForeground(NOTIFICATION_ID, notification("正在连接代理…"))
-        startTunnel()
+        runCatching {
+            startForeground(NOTIFICATION_ID, notification("正在连接代理…"))
+            startTunnel()
+        }.onFailure { failSafely(it) }
         return START_STICKY
     }
 
@@ -89,7 +91,10 @@ class AuroraVpnService : VpnService() {
             appendLine("  cache-size: 10000")
         }
         val configFile = File(cacheDir, "hev-socks5-tunnel.yml").apply { writeText(yaml) }
-        if (TProxyService.TProxyStartService(configFile.absolutePath, descriptor.fd)) {
+        val started = runCatching { TProxyService.TProxyStartService(configFile.absolutePath, descriptor.fd) }.getOrElse {
+            failSafely(it); return
+        }
+        if (started) {
             setState(true, "${profile.protocol.uppercase()} 已连接 ${profile.host}:${profile.port}")
             val manager = getSystemService(NotificationManager::class.java)
             manager.notify(NOTIFICATION_ID, notification("全局代理已连接"))
@@ -99,6 +104,17 @@ class AuroraVpnService : VpnService() {
             tun = null
             stopSelf()
         }
+    }
+
+    private fun failSafely(error: Throwable) {
+        val safeName = error.javaClass.simpleName
+        val safeMessage = error.message?.take(180).orEmpty()
+        setState(false, "连接失败：$safeName${if (safeMessage.isNotBlank()) " · $safeMessage" else ""}")
+        runCatching { if (TProxyService.TProxyIsRunning()) TProxyService.TProxyStopService() }
+        runCatching { singBox?.destroy() }; singBox = null
+        runCatching { tun?.close() }; tun = null
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+        stopSelf()
     }
 
     private fun stopTunnel() {

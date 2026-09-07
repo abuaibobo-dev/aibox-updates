@@ -15,4 +15,4 @@ jobs:
       - run: gradle :app:assembleDebug --stacktrace --warning-mode all
         working-directory: android
       - uses: actions/upload-artifact@v4
-        with: { name: ORVYN-Android-v0.5.0, path: android/app/build/outputs/apk/debug/*.apk }
+        with: { name: ORVYN-Android-v0.5.1-QR-CrashFix, path: android/app/build/outputs/apk/debug/*.apk }
