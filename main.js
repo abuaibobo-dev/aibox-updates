@@ -207,8 +207,8 @@ ipcMain.handle('updates:app', async (_, payload) => {
   const portableTarget = process.env.PORTABLE_EXECUTABLE_FILE || '';
   const candidates = release.assets || [];
   const asset = portableTarget
-    ? candidates.find(x => /极光工作箱.*\.exe$/i.test(x.name) && !/setup/i.test(x.name))
-    : candidates.find(x => /极光工作箱.*setup.*\.exe$/i.test(x.name));
+    ? candidates.find(x => /(?:极光工作箱|Aurora-Toolbox).*\.exe$/i.test(x.name) && !/setup/i.test(x.name))
+    : candidates.find(x => /(?:极光工作箱|Aurora-Toolbox).*setup.*\.exe$/i.test(x.name));
   if (!asset) throw new Error(`Release ${release.tag_name} 中没有找到${portableTarget?'便携版':'安装版'}更新文件`);
   const latest = String(release.tag_name).replace(/^v/i, ''), current = app.getVersion();
   if (payload.action === 'check') return { current, latest, available: latest !== current, publishedAt: release.published_at, size: asset.size, asset: asset.name, digest: asset.digest || '', notes: String(release.body || '').slice(0, 2000), repository: UPDATE_REPO };

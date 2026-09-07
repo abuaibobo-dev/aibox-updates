@@ -27,6 +27,11 @@ jobs:
         run: pnpm run check
       - name: Build Windows packages
         run: pnpm exec electron-builder --win nsis portable --publish never
+      - name: Prepare release assets
+        shell: pwsh
+        run: |
+          Copy-Item (Get-ChildItem "dist/*Setup*.exe" | Select-Object -First 1).FullName "dist/Aurora-Toolbox-Setup-${{ github.ref_name }}.exe"
+          Copy-Item (Get-ChildItem "dist/*.exe" | Where-Object Name -NotLike "*Setup*" | Select-Object -First 1).FullName "dist/Aurora-Toolbox-Portable-${{ github.ref_name }}.exe"
       - name: Publish GitHub Release
         shell: pwsh
         env:
@@ -36,7 +41,7 @@ jobs:
           $notes = "极光工作箱 $tag 自动构建版本。支持应用内一键升级。"
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag "dist/极光工作箱 Setup *.exe" "dist/极光工作箱 *.exe" --clobber
+            gh release upload $tag "dist/Aurora-Toolbox-Setup-$tag.exe" "dist/Aurora-Toolbox-Portable-$tag.exe" --clobber
           } else {
-            gh release create $tag "dist/极光工作箱 Setup *.exe" "dist/极光工作箱 *.exe" --title "极光工作箱 $tag" --notes $notes
+            gh release create $tag "dist/Aurora-Toolbox-Setup-$tag.exe" "dist/Aurora-Toolbox-Portable-$tag.exe" --title "极光工作箱 $tag" --notes $notes
           }
