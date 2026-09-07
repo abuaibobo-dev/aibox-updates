@@ -4,8 +4,8 @@ android { namespace="com.aurora.toolbox.mobile"; compileSdk=35
         applicationId="com.aurora.toolbox.mobile"
         minSdk=26
         targetSdk=35
-        versionCode=10
-        versionName="0.5.4"
+        versionCode=11
+        versionName="0.5.5"
     }
     buildFeatures { compose=true }
     splits {

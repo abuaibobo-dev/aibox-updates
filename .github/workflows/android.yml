@@ -19,15 +19,15 @@ jobs:
       - name: Prepare direct APK downloads
         shell: bash
         run: |
-          cp android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk ORVYN-v0.5.4-arm64.apk
-          cp android/app/build/outputs/apk/debug/app-x86_64-debug.apk ORVYN-v0.5.4-x86_64.apk
+          cp android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk ORVYN-v0.5.5-arm64.apk
+          cp android/app/build/outputs/apk/debug/app-x86_64-debug.apk ORVYN-v0.5.5-x86_64.apk
       - uses: actions/upload-artifact@v4
-        with: { name: ORVYN-Android-v0.5.4-Verified-JNI, path: android/app/build/outputs/apk/debug/*.apk }
+        with: { name: ORVYN-Android-v0.5.5-VPN-Stability, path: android/app/build/outputs/apk/debug/*.apk }
       - name: Publish and verify direct APK links
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view orvyn-v0.5.4 >/dev/null 2>&1 || gh release create orvyn-v0.5.4 --title "ORVYN v0.5.4" --notes "Uses the official SocksTun JNI library and removes the unavailable TProxyIsRunning binding."
-          gh release upload orvyn-v0.5.4 ORVYN-v0.5.4-arm64.apk ORVYN-v0.5.4-x86_64.apk --clobber
-          test "$(gh release view orvyn-v0.5.4 --json assets --jq '.assets | length')" -eq 2
+          gh release view orvyn-v0.5.5 >/dev/null 2>&1 || gh release create orvyn-v0.5.5 --title "ORVYN v0.5.5" --notes "Runs VPN in an isolated process and aligns tunnel settings with official SocksTun defaults."
+          gh release upload orvyn-v0.5.5 ORVYN-v0.5.5-arm64.apk ORVYN-v0.5.5-x86_64.apk --clobber
+          test "$(gh release view orvyn-v0.5.5 --json assets --jq '.assets | length')" -eq 2

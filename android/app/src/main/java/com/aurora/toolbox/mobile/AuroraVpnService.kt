@@ -24,12 +24,13 @@ class AuroraVpnService : VpnService() {
             startForeground(NOTIFICATION_ID, notification("正在连接代理…"))
             startTunnel()
         }.onFailure { failSafely(it) }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun startTunnel() {
         if (tun != null) return
-        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        @Suppress("DEPRECATION")
+        val prefs = getSharedPreferences(PREFS, Context.MODE_MULTI_PROCESS)
         val raw = prefs.getString(KEY_NODE, "").orEmpty()
         val profile = runCatching { SingBoxConfig.parse(raw) }.getOrElse {
             setState(false, "连接失败：${it.message}")
@@ -39,8 +40,9 @@ class AuroraVpnService : VpnService() {
 
         tun = Builder()
             .setSession("ORVYN 智能代理")
-            .setMtu(1500)
-            .addAddress("198.18.0.1", 15)
+            .setBlocking(false)
+            .setMtu(8500)
+            .addAddress("198.18.0.1", 32)
             .addRoute("0.0.0.0", 0)
             .addDnsServer("1.1.1.1")
             .addDisallowedApplication(packageName)
@@ -73,9 +75,9 @@ class AuroraVpnService : VpnService() {
         }
         val yaml = buildString {
             appendLine("misc:")
-            appendLine("  task-stack-size: 24576")
+            appendLine("  task-stack-size: 81920")
             appendLine("tunnel:")
-            appendLine("  mtu: 1500")
+            appendLine("  mtu: 8500")
             appendLine("  icmp: 'reply'")
             appendLine("socks5:")
             appendLine("  address: '${socksTarget.host.yaml()}'")
@@ -156,7 +158,8 @@ class AuroraVpnService : VpnService() {
     }
 
     private fun setState(connected: Boolean, message: String) {
-        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        @Suppress("DEPRECATION")
+        getSharedPreferences(PREFS, Context.MODE_MULTI_PROCESS).edit()
             .putBoolean(KEY_CONNECTED, connected)
             .putString(KEY_STATUS, message)
             .apply()

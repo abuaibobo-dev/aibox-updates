@@ -12,6 +12,7 @@
         </activity>
         <service
             android:name=".AuroraVpnService"
+            android:process=":vpn"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:exported="false"
             android:foregroundServiceType="specialUse">

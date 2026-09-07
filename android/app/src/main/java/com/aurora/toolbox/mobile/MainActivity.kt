@@ -71,7 +71,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable private fun ConnectPage(activity: MainActivity, openNodes: () -> Unit) {
-    val prefs = activity.getSharedPreferences(AuroraVpnService.PREFS, Context.MODE_PRIVATE)
+    @Suppress("DEPRECATION")
+    val prefs = activity.getSharedPreferences(AuroraVpnService.PREFS, Context.MODE_MULTI_PROCESS)
     var connected by remember { mutableStateOf(prefs.getBoolean(AuroraVpnService.KEY_CONNECTED, false)) }
     var status by remember { mutableStateOf(prefs.getString(AuroraVpnService.KEY_STATUS, "未连接").orEmpty()) }
     val nodeText = prefs.getString(AuroraVpnService.KEY_NODE, "").orEmpty()
@@ -105,7 +106,8 @@ class MainActivity : ComponentActivity() {
 @Composable private fun Metric(label: String, value: String) = Column { Text(label, color = Muted, fontSize = 11.sp); Text(value, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
 
 @Composable private fun NodesPage(activity: MainActivity) {
-    val prefs = activity.getSharedPreferences(AuroraVpnService.PREFS, Context.MODE_PRIVATE)
+    @Suppress("DEPRECATION")
+    val prefs = activity.getSharedPreferences(AuroraVpnService.PREFS, Context.MODE_MULTI_PROCESS)
     var nodes by remember { mutableStateOf(NodeStore.load(prefs)) }; var showImport by remember { mutableStateOf(false) }; var message by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? -> uri?.let {
         BarcodeScanning.getClient().process(InputImage.fromFilePath(activity, it)).addOnSuccessListener { result ->
@@ -129,7 +131,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable private fun ImportDialog(onDismiss: () -> Unit, import: (String) -> Unit) { var text by remember { mutableStateOf("") }; AlertDialog(onDismissRequest = onDismiss, title = { Text("导入中心") }, text = { Column { Text("支持单节点、多行链接和 Base64 订阅内容", color = Muted); Spacer(Modifier.height(10.dp)); OutlinedTextField(text, { text = it }, minLines = 6, maxLines = 12, label = { Text("粘贴节点或订阅内容") }) } }, confirmButton = { Button({ import(text) }) { Text("识别并导入") } }, dismissButton = { TextButton(onDismiss) { Text("取消") } }) }
 
-@Composable private fun RulesPage(activity: MainActivity) { val prefs = activity.getSharedPreferences(AuroraVpnService.PREFS, Context.MODE_PRIVATE); var mode by remember { mutableStateOf(prefs.getString("route_mode", "全局代理") ?: "全局代理") }; var lan by remember { mutableStateOf(prefs.getBoolean("bypass_lan", true)) }; var ipv6 by remember { mutableStateOf(prefs.getBoolean("ipv6", false)) }
+@Composable private fun RulesPage(activity: MainActivity) { @Suppress("DEPRECATION") val prefs = activity.getSharedPreferences(AuroraVpnService.PREFS, Context.MODE_MULTI_PROCESS); var mode by remember { mutableStateOf(prefs.getString("route_mode", "全局代理") ?: "全局代理") }; var lan by remember { mutableStateOf(prefs.getBoolean("bypass_lan", true)) }; var ipv6 by remember { mutableStateOf(prefs.getBoolean("ipv6", false)) }
     Column(Modifier.fillMaxSize().background(Void)) { Header("路由规则", "决定哪些流量经过代理"); listOf("全局代理", "智能分流", "仅代理指定应用").forEach { item -> ListItem(headlineContent = { Text(item) }, leadingContent = { RadioButton(mode == item, { mode = item; prefs.edit().putString("route_mode", item).apply() }) }, colors = ListItemDefaults.colors(containerColor = Color.Transparent)) }; SettingSwitch("绕过局域网", "访问路由器和局域网设备时直连", lan) { lan = it; prefs.edit().putBoolean("bypass_lan", it).apply() }; SettingSwitch("IPv6", "节点与网络均支持时启用", ipv6) { ipv6 = it; prefs.edit().putBoolean("ipv6", it).apply() } }
 }
 
