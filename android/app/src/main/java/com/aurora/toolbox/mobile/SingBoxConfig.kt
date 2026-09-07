@@ -12,7 +12,7 @@ object SingBoxConfig {
         val raw = rawValue.trim().substringBefore('{').removeSuffix("proxy").trim()
             .replace(Regex("@\\[(\\d{1,3}(?:\\.\\d{1,3}){3})]"), "@$1")
         return when (raw.substringBefore(':').lowercase()) {
-            "socks5" -> ProxyConfig.parse(raw).let { ProxyProfile("socks5", it.host, it.port, null) }
+            "socks", "socks5", "socks5h" -> ProxyConfig.parse(raw).let { ProxyProfile("socks5", it.host, it.port, null) }
             "vmess" -> vmess(raw.removePrefix("vmess://"))
             "vless" -> standardUri(raw, "vless")
             "trojan" -> standardUri(raw, "trojan")
