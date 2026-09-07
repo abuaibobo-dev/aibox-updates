@@ -10,6 +10,8 @@ import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import hev.sockstun.TProxyService
 import java.io.File
+import java.net.InetSocketAddress
+import java.net.Socket
 
 class AuroraVpnService : VpnService() {
     private var tun: ParcelFileDescriptor? = null
@@ -22,7 +24,7 @@ class AuroraVpnService : VpnService() {
         }
         runCatching {
             startForeground(NOTIFICATION_ID, notification("正在连接代理…"))
-            startTunnel()
+            Thread { runCatching { startTunnel() }.onFailure { failSafely(it) } }.start()
         }.onFailure { failSafely(it) }
         return START_NOT_STICKY
     }
@@ -38,13 +40,24 @@ class AuroraVpnService : VpnService() {
             return
         }
 
+        if (profile.protocol == "socks5") {
+            val check = ProxyProbe.check(ProxyConfig.parse(raw))
+            if (check != null) {
+                setState(false, "连接失败：$check")
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return
+            }
+            setState(false, "节点验证成功，正在建立 VPN…")
+        }
+
         tun = Builder()
             .setSession("ORVYN 智能代理")
             .setBlocking(false)
             .setMtu(8500)
             .addAddress("198.18.0.1", 32)
             .addRoute("0.0.0.0", 0)
-            .addDnsServer("1.1.1.1")
+            .addDnsServer("198.18.0.2")
             .addDisallowedApplication(packageName)
             .establish()
 
@@ -177,4 +190,37 @@ class AuroraVpnService : VpnService() {
         private const val CHANNEL_ID = "aurora_proxy"
         private const val NOTIFICATION_ID = 208
     }
+}
+
+private object ProxyProbe {
+    fun check(config: ProxyConfig): String? = runCatching {
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress(config.host, config.port), 7000)
+            socket.soTimeout = 7000
+            val input = socket.getInputStream()
+            val output = socket.getOutputStream()
+            val useAuth = config.username.isNotEmpty()
+            output.write(if (useAuth) byteArrayOf(5, 1, 2) else byteArrayOf(5, 1, 0)); output.flush()
+            require(input.read() == 5) { "SOCKS 握手响应无效" }
+            val method = input.read()
+            require(method != 0xFF) { "服务器不接受可用的认证方式" }
+            if (method == 2) {
+                val user = config.username.toByteArray(Charsets.UTF_8)
+                val pass = config.password.toByteArray(Charsets.UTF_8)
+                require(user.size <= 255 && pass.size <= 255) { "账号或密码过长" }
+                output.write(byteArrayOf(1, user.size.toByte())); output.write(user)
+                output.write(byteArrayOf(pass.size.toByte())); output.write(pass); output.flush()
+                require(input.read() == 1 && input.read() == 0) { "SOCKS 用户名或密码错误" }
+            } else require(method == 0) { "服务器返回未知认证方式：$method" }
+            output.write(byteArrayOf(5, 1, 0, 1, 1, 1, 1, 1, 1, -69)); output.flush()
+            require(input.read() == 5) { "SOCKS CONNECT 响应无效" }
+            val reply = input.read()
+            require(reply == 0) { "代理服务器拒绝转发（代码 $reply）" }
+        }
+        null
+    }.getOrElse { error -> when (error) {
+        is java.net.SocketTimeoutException -> "服务器连接超时"
+        is java.net.ConnectException -> "服务器端口不可达"
+        else -> error.message ?: error.javaClass.simpleName
+    } }
 }
