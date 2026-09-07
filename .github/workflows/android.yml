@@ -15,4 +15,4 @@ jobs:
       - run: gradle :app:assembleDebug
         working-directory: android
       - uses: actions/upload-artifact@v4
-        with: { name: Aurora-Toolbox-Android-v0.1.0, path: android/app/build/outputs/apk/debug/app-debug.apk }
+        with: { name: Aurora-Toolbox-Android-v0.2.0, path: android/app/build/outputs/apk/debug/app-debug.apk }

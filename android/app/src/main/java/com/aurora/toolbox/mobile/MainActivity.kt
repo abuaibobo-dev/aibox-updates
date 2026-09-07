@@ -1,32 +1,37 @@
 package com.aurora.toolbox.mobile
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import kotlin.random.Random
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import java.net.URI
 
-data class Tool(val icon:String,val title:String,val desc:String)
+data class Tool(val id:String,val icon:String,val title:String,val desc:String)
 private val tools=listOf(
- Tool("⌁","IP 与网络","查看网络与公网地址"),Tool("◫","图片工具","压缩、转换与放大"),
- Tool("▦","二维码","识别与生成二维码"),Tool("GIF","GIF 制作","多图合成动画"),
- Tool("Aa","名字生成","英文名与日本名字"),Tool("☎","资料生成","测试电话与示例地址"),
- Tool("文","日语专区","常用语、文化与礼仪"),Tool("¥","日本股票","行情与基础知识"),
- Tool("✎","加密记事本","本机加密保存"),Tool("123","字数统计","字符、单词与行数"),
- Tool("6","2FA 验证码","本地 TOTP 计算"),Tool("◎","内置浏览器","常用网站与翻译"),
- Tool("{}","开发工具","JSON、Base64 与哈希"),Tool("⚙","手机设置","权限、缓存与更新")
+ Tool("proxy","⇄","代理中心","导入节点、检查格式与打开 VPN 设置"),
+ Tool("system","⌁","系统检查","查看设备、系统、内存与存储信息"),
+ Tool("ocr","文","文字提取","从相册图片提取中文、日文和英文"),
+ Tool("qr","▦","二维码识别","从相册图片读取二维码内容")
 )
-class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.onCreate(b);setContent{AuroraApp()}}}
-@Composable fun AuroraApp(){var selected by remember{mutableStateOf<Tool?>(null)};MaterialTheme(colorScheme=darkColorScheme(primary=Color(0xFF4CE4D0),background=Color(0xFF07111F),surface=Color(0xFF0D1B2D))){Surface(Modifier.fillMaxSize()){if(selected==null)Home{selected=it}else ToolPage(selected!!){selected=null}}}}
-@Composable fun Home(open:(Tool)->Unit){Column(Modifier.fillMaxSize().background(Color(0xFF07111F)).padding(18.dp)){Text("AURORA MOBILE",color=Color(0xFF4CE4D0));Text("极光工作箱",style=MaterialTheme.typography.headlineLarge,color=Color.White);Text("移动端工具矩阵 · 本地优先",color=Color(0xFF8296AA));Spacer(Modifier.height(18.dp));LazyVerticalGrid(GridCells.Fixed(2),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){items(tools){t->Card(Modifier.fillMaxWidth().height(142.dp).clickable{open(t)},colors=CardDefaults.cardColors(containerColor=Color(0xFF0D1B2D))){Column(Modifier.padding(16.dp)){Text(t.icon,color=Color(0xFF4CE4D0),style=MaterialTheme.typography.headlineSmall);Spacer(Modifier.height(12.dp));Text(t.title,color=Color.White);Text(t.desc,color=Color(0xFF8296AA),style=MaterialTheme.typography.bodySmall)}}}}}}
-@Composable fun ToolPage(tool:Tool,back:()->Unit){var text by remember{mutableStateOf("")};Column(Modifier.fillMaxSize().background(Color(0xFF07111F)).padding(18.dp)){TextButton(onClick=back){Text("← 返回")};Text("${tool.icon}  ${tool.title}",style=MaterialTheme.typography.headlineMedium,color=Color.White);Text(tool.desc,color=Color(0xFF8296AA));Spacer(Modifier.height(20.dp));OutlinedTextField(text,{text=it},Modifier.fillMaxWidth(),label={Text("输入内容")});Spacer(Modifier.height(12.dp));Button(onClick={text=when(tool.title){"字数统计"->"字符 ${text.length} · 行数 ${if(text.isEmpty())0 else text.lines().size}";"名字生成"->listOf("Haruto Sato / 佐藤 陽翔","Emma Wilson","Aoi Tanaka / 田中 葵").random();"资料生成"->"+81 ${Random.nextInt(10,99)}-${Random.nextInt(1000,9999)}-${Random.nextInt(1000,9999)}";else->"${tool.title} 移动端模块已就绪"}}){Text("执行")};Spacer(Modifier.height(16.dp));Text(text,color=Color.White)}}
+private val bg=Color(0xFF07111F);private val panel=Color(0xFF0D1B2D);private val cyan=Color(0xFF4CE4D0);private val muted=Color(0xFF8296AA)
+
+class MainActivity:ComponentActivity(){override fun onCreate(s:Bundle?){super.onCreate(s);setContent{App(this)}}}
+@Composable fun App(a:MainActivity){var selected by remember{mutableStateOf<Tool?>(null)};MaterialTheme(colorScheme=darkColorScheme(primary=cyan,background=bg,surface=panel)){Surface(Modifier.fillMaxSize()){if(selected==null)Home{selected=it}else Page(a,selected!!){selected=null}}}}
+@Composable fun Home(open:(Tool)->Unit){Column(Modifier.fillMaxSize().background(bg).padding(20.dp)){Text("AURORA MOBILE · CORE",color=cyan);Text("极光工作箱",style=MaterialTheme.typography.headlineLarge,color=Color.White);Text("轻量手机版 · 仅保留四项核心能力",color=muted);Spacer(Modifier.height(24.dp));tools.forEach{t->Card(Modifier.fillMaxWidth().padding(vertical=7.dp).clickable{open(t)},colors=CardDefaults.cardColors(containerColor=panel)){Row(Modifier.padding(20.dp)){Text(t.icon,color=cyan,style=MaterialTheme.typography.headlineSmall);Spacer(Modifier.width(18.dp));Column{Text(t.title,color=Color.White,style=MaterialTheme.typography.titleMedium);Text(t.desc,color=muted)}}}}}}
+@Composable fun Page(a:MainActivity,t:Tool,back:()->Unit){var input by remember{mutableStateOf("")};var output by remember{mutableStateOf("")};val picker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri:Uri?->if(uri!=null){val image=InputImage.fromFilePath(a,uri);if(t.id=="ocr")TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()).process(image).addOnSuccessListener{output=it.text.ifBlank{"未识别到文字"}}.addOnFailureListener{output="识别失败：${it.message}"}else BarcodeScanning.getClient().process(image).addOnSuccessListener{output=it.mapNotNull{x->x.rawValue}.joinToString("\n").ifBlank{"未识别到二维码"}}.addOnFailureListener{output="识别失败：${it.message}"}}};Column(Modifier.fillMaxSize().background(bg).padding(20.dp)){TextButton(onClick=back){Text("← 返回")};Text("${t.icon}  ${t.title}",style=MaterialTheme.typography.headlineMedium,color=Color.White);Text(t.desc,color=muted);Spacer(Modifier.height(24.dp));when(t.id){"proxy"->{OutlinedTextField(input,{input=it},Modifier.fillMaxWidth(),label={Text("代理节点链接")},minLines=3);Spacer(Modifier.height(12.dp));Button(onClick={output=runCatching{val u=URI(input.trim());if(u.scheme !in listOf("http","https","socks5","vmess","vless","trojan"))error("不支持的协议");"节点格式有效：${u.scheme}"}.getOrElse{"格式无效：${it.message}"}},Modifier.fillMaxWidth()){Text("检查节点")};OutlinedButton(onClick={a.startActivity(Intent(Settings.ACTION_VPN_SETTINGS))},Modifier.fillMaxWidth()){Text("打开 Android VPN 设置")}};"system"->{val rt=Runtime.getRuntime();output="设备：${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\nAndroid：${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})\nCPU 架构：${android.os.Build.SUPPORTED_ABIS.joinToString()}\n应用可用内存：${(rt.maxMemory()-rt.totalMemory()+rt.freeMemory())/1048576} MB";Button(onClick={output=output},Modifier.fillMaxWidth()){Text("刷新检查")}};else->Button(onClick={picker.launch("image/*")},Modifier.fillMaxWidth()){Text(if(t.id=="ocr")"选择图片提取文字" else "选择二维码图片")}};if(output.isNotBlank()){Spacer(Modifier.height(20.dp));Card(colors=CardDefaults.cardColors(containerColor=panel)){Text(output,Modifier.fillMaxWidth().padding(16.dp),color=Color.White)}}}}
