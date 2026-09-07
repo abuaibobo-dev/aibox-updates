@@ -1,0 +1,42 @@
+name: Build and publish Aurora Toolbox
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify source
+        run: pnpm run check
+      - name: Build Windows packages
+        run: pnpm exec electron-builder --win nsis portable
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $notes = "极光工作箱 $tag 自动构建版本。支持应用内一键升级。"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag "dist/极光工作箱 Setup *.exe" "dist/极光工作箱 *.exe" --clobber
+          } else {
+            gh release create $tag "dist/极光工作箱 Setup *.exe" "dist/极光工作箱 *.exe" --title "极光工作箱 $tag" --notes $notes
+          }

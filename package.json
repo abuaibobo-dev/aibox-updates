@@ -1,0 +1,30 @@
+{
+  "name": "computer-toolbox",
+  "version": "1.1.0",
+  "private": true,
+  "description": "模块化电脑工作箱",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check app.js && node --check main.js && node --check preload.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis portable"
+  },
+  "dependencies": {
+    "gifenc": "^1.0.3",
+    "tesseract.js": "^6.0.1"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.aurora.toolbox",
+    "productName": "极光工作箱",
+    "asar": true,
+    "files": ["app.js", "index.html", "main.js", "preload.js", "styles.css", "theme.css", "package.json"],
+    "extraResources": [{ "from": "resources/bin", "to": "bin", "filter": ["**/*"] }],
+    "win": { "target": ["nsis", "portable"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true }
+  }
+}

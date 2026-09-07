@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark"><title>极光工作箱</title>
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="theme.css">
+</head>
+<body><div class="tech-bg"><i></i><i></i><i></i></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">A</span><div><b>极光工作箱</b><small>AURORA TOOLBOX</small></div></div>
+      <nav id="categories"></nav>
+      <div class="sidebar-foot"><span class="pulse"></span><div><b>本机模式</b><small>数据优先保存在本地</small></div></div>
+    </aside>
+    <main>
+      <header><button class="mobile-menu">☰</button><label class="search"><span>⌕</span><input id="search" placeholder="搜索工具、功能或关键词…"><kbd>Ctrl K</kbd></label><div class="system-hud"><span><i></i> SYSTEM ONLINE</span><div class="date" id="clock"></div></div></header>
+      <section class="hero">
+        <div><p class="eyebrow">AURORA OS · DIGITAL UTILITY MATRIX</p><h1>电脑工作箱 <span>CONTROL HUB</span></h1><p>网络、图像、生成、办公与日本专区，一站式模块化控制。</p><div class="hero-tags"><b>32 MODULES</b><b>LOCAL FIRST</b><b>ENCRYPTED</b></div></div>
+        <div class="hero-orb"><span>30+</span><small>实用模块</small></div>
+      </section>
+      <section class="quick"><button data-open="network"><i>⌁</i><span><b>查看本机 IP</b><small>网络状态与地址</small></span><em>→</em></button><button data-open="notebook"><i>✎</i><span><b>快速记事</b><small>本地加密保存</small></span><em>→</em></button><button data-open="jpname"><i>あ</i><span><b>日本名字生成</b><small>汉字 · 假名 · 罗马字</small></span><em>→</em></button></section>
+      <div class="section-title"><div><p class="eyebrow">ALL TOOLS</p><h2>全部工具</h2></div><span id="count"></span></div>
+      <section id="grid" class="tool-grid"></section>
+    </main>
+  </div>
+  <dialog id="modal"><div class="modal-head"><div><span id="modalIcon"></span><div><h2 id="modalTitle"></h2><p id="modalDesc"></p></div></div><button id="close">×</button></div><div id="modalBody" class="modal-body"></div></dialog>
+  <div id="toast"></div><script src="app.js"></script>
+</body>
+</html>
