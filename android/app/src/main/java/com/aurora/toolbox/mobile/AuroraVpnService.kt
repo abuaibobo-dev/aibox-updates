@@ -28,7 +28,7 @@ class AuroraVpnService : VpnService() {
     }
 
     private fun startTunnel() {
-        if (tun != null || TProxyService.TProxyIsRunning()) return
+        if (tun != null) return
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val raw = prefs.getString(KEY_NODE, "").orEmpty()
         val profile = runCatching { SingBoxConfig.parse(raw) }.getOrElse {
@@ -110,7 +110,7 @@ class AuroraVpnService : VpnService() {
         val safeName = error.javaClass.simpleName
         val safeMessage = error.message?.take(180).orEmpty()
         setState(false, "连接失败：$safeName${if (safeMessage.isNotBlank()) " · $safeMessage" else ""}")
-        runCatching { if (TProxyService.TProxyIsRunning()) TProxyService.TProxyStopService() }
+        if (tun != null) runCatching { TProxyService.TProxyStopService() }
         runCatching { singBox?.destroy() }; singBox = null
         runCatching { tun?.close() }; tun = null
         runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
@@ -118,7 +118,7 @@ class AuroraVpnService : VpnService() {
     }
 
     private fun stopTunnel() {
-        if (TProxyService.TProxyIsRunning()) TProxyService.TProxyStopService()
+        if (tun != null) runCatching { TProxyService.TProxyStopService() }
         singBox?.destroy()
         singBox = null
         runCatching { tun?.close() }
