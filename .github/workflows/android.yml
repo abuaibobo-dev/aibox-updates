@@ -19,16 +19,16 @@ jobs:
       - name: Prepare direct APK downloads
         shell: bash
         run: |
-          cp android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk ORVYN-v0.5.1-arm64.apk
-          cp android/app/build/outputs/apk/debug/app-x86_64-debug.apk ORVYN-v0.5.1-x86_64.apk
+          cp android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk ORVYN-v0.5.2-arm64.apk
+          cp android/app/build/outputs/apk/debug/app-x86_64-debug.apk ORVYN-v0.5.2-x86_64.apk
       - uses: actions/upload-artifact@v4
-        with: { name: ORVYN-Android-v0.5.1-QR-CrashFix, path: android/app/build/outputs/apk/debug/*.apk }
+        with: { name: ORVYN-Android-v0.5.2-JNI-Fix, path: android/app/build/outputs/apk/debug/*.apk }
       - name: Publish direct APK links
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: orvyn-v0.5.1
-          name: ORVYN v0.5.1
-          body: "QR import and VPN startup stability fixes. ARM64 is recommended for most Android phones."
+          tag_name: orvyn-v0.5.2
+          name: ORVYN v0.5.2
+          body: "Fixes the native hev-socks5-tunnel JNI binding. ARM64 is recommended for most Android phones."
           files: |
-            ORVYN-v0.5.1-arm64.apk
-            ORVYN-v0.5.1-x86_64.apk
+            ORVYN-v0.5.2-arm64.apk
+            ORVYN-v0.5.2-x86_64.apk

@@ -1,4 +1,4 @@
-package hev.htproxy
+package hev.sockstun
 
 object TProxyService {
     external fun TProxyStartService(configPath: String, fd: Int): Boolean

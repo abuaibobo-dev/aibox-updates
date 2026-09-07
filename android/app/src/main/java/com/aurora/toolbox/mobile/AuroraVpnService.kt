@@ -8,7 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
-import hev.htproxy.TProxyService
+import hev.sockstun.TProxyService
 import java.io.File
 
 class AuroraVpnService : VpnService() {
