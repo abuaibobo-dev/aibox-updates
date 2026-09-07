@@ -26,7 +26,7 @@ jobs:
       - name: Verify source
         run: pnpm run check
       - name: Build Windows packages
-        run: pnpm exec electron-builder --win nsis portable
+        run: pnpm exec electron-builder --win nsis portable --publish never
       - name: Publish GitHub Release
         shell: pwsh
         env:
