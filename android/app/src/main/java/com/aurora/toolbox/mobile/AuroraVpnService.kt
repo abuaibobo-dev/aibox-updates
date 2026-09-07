@@ -13,6 +13,7 @@ import java.io.File
 
 class AuroraVpnService : VpnService() {
     private var tun: ParcelFileDescriptor? = null
+    private var singBox: Process? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_DISCONNECT) {
@@ -28,7 +29,7 @@ class AuroraVpnService : VpnService() {
         if (tun != null || TProxyService.TProxyIsRunning()) return
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val raw = prefs.getString(KEY_NODE, "").orEmpty()
-        val config = runCatching { ProxyConfig.parse(raw) }.getOrElse {
+        val profile = runCatching { SingBoxConfig.parse(raw) }.getOrElse {
             setState(false, "连接失败：${it.message}")
             stopSelf()
             return
@@ -48,6 +49,26 @@ class AuroraVpnService : VpnService() {
             stopSelf()
             return
         }
+        val socksTarget = if (profile.protocol == "socks5") {
+            ProxyConfig.parse(raw)
+        } else {
+            val executable = File(applicationInfo.nativeLibraryDir, "libsingbox.so")
+            if (!executable.exists()) {
+                setState(false, "当前 CPU 架构缺少 sing-box 内核")
+                runCatching { descriptor.close() }
+                tun = null
+                stopSelf()
+                return
+            }
+            val singConfig = File(filesDir, "sing-box.json").apply {
+                writeText(SingBoxConfig.fullConfig(profile))
+            }
+            singBox = ProcessBuilder(executable.absolutePath, "run", "-c", singConfig.absolutePath)
+                .redirectErrorStream(true)
+                .redirectOutput(File(cacheDir, "sing-box.log"))
+                .start()
+            ProxyConfig("127.0.0.1", 20808)
+        }
         val yaml = buildString {
             appendLine("misc:")
             appendLine("  task-stack-size: 24576")
@@ -55,11 +76,11 @@ class AuroraVpnService : VpnService() {
             appendLine("  mtu: 1500")
             appendLine("  icmp: 'reply'")
             appendLine("socks5:")
-            appendLine("  address: '${config.host.yaml()}'")
-            appendLine("  port: ${config.port}")
+            appendLine("  address: '${socksTarget.host.yaml()}'")
+            appendLine("  port: ${socksTarget.port}")
             appendLine("  udp: 'udp'")
-            if (config.username.isNotEmpty()) appendLine("  username: '${config.username.yaml()}'")
-            if (config.password.isNotEmpty()) appendLine("  password: '${config.password.yaml()}'")
+            if (socksTarget.username.isNotEmpty()) appendLine("  username: '${socksTarget.username.yaml()}'")
+            if (socksTarget.password.isNotEmpty()) appendLine("  password: '${socksTarget.password.yaml()}'")
             appendLine("mapdns:")
             appendLine("  address: 1.1.1.1")
             appendLine("  port: 53")
@@ -69,7 +90,7 @@ class AuroraVpnService : VpnService() {
         }
         val configFile = File(cacheDir, "hev-socks5-tunnel.yml").apply { writeText(yaml) }
         if (TProxyService.TProxyStartService(configFile.absolutePath, descriptor.fd)) {
-            setState(true, "已连接 ${config.host}:${config.port}")
+            setState(true, "${profile.protocol.uppercase()} 已连接 ${profile.host}:${profile.port}")
             val manager = getSystemService(NotificationManager::class.java)
             manager.notify(NOTIFICATION_ID, notification("全局代理已连接"))
         } else {
@@ -82,6 +103,8 @@ class AuroraVpnService : VpnService() {
 
     private fun stopTunnel() {
         if (TProxyService.TProxyIsRunning()) TProxyService.TProxyStopService()
+        singBox?.destroy()
+        singBox = null
         runCatching { tun?.close() }
         tun = null
         setState(false, "已断开")

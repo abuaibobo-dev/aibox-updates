@@ -4,11 +4,19 @@ android { namespace="com.aurora.toolbox.mobile"; compileSdk=35
         applicationId="com.aurora.toolbox.mobile"
         minSdk=26
         targetSdk=35
-        versionCode=3
-        versionName="0.3.0"
+        versionCode=4
+        versionName="0.4.0"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
     buildFeatures { compose=true }
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = false
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
