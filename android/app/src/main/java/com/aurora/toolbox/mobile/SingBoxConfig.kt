@@ -5,7 +5,7 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class ProxyProfile(val protocol: String, val host: String, val port: Int, val outbound: JSONObject?)
+data class ProxyProfile(val protocol: String, val host: String, val port: Int, val outbound: JSONObject?, val name: String = "")
 
 object SingBoxConfig {
     fun parse(rawValue: String): ProxyProfile {
@@ -17,7 +17,16 @@ object SingBoxConfig {
             "vless" -> standardUri(raw, "vless")
             "trojan" -> standardUri(raw, "trojan")
             "ss" -> shadowsocks(raw)
-            else -> error("支持 socks5、ss、vmess、vless、trojan")
+            "http", "https" -> http(raw)
+            "hysteria", "hysteria2", "hy2" -> advancedUri(raw, "hysteria2")
+            "tuic" -> advancedUri(raw, "tuic")
+            "anytls" -> advancedUri(raw, "anytls")
+            "ssh" -> advancedUri(raw, "ssh")
+            "shadowtls" -> advancedUri(raw, "shadowtls")
+            "naive" -> advancedUri(raw, "naive")
+            "snell" -> advancedUri(raw, "snell")
+            "wireguard", "wg" -> error("已识别 WireGuard；请导入标准 sing-box JSON 配置")
+            else -> error("不支持的节点格式")
         }
     }
 
@@ -64,7 +73,7 @@ object SingBoxConfig {
                 .put("public_key", uri.getQueryParameter("pbk").orEmpty()).put("short_id", uri.getQueryParameter("sid").orEmpty()))
             outbound.put("tls", tls)
         }
-        return ProxyProfile(type, host, port, outbound)
+        return ProxyProfile(type, host, port, outbound, Uri.decode(uri.fragment.orEmpty()))
     }
 
     private fun shadowsocks(raw: String): ProxyProfile {
@@ -79,7 +88,41 @@ object SingBoxConfig {
         val port = serverPart.substringAfterLast(':').substringBefore('?').toInt()
         val outbound = JSONObject().put("type", "shadowsocks").put("server", host).put("server_port", port)
             .put("method", method).put("password", password)
-        return ProxyProfile("ss", host, port, outbound)
+        return ProxyProfile("ss", host, port, outbound, Uri.decode(raw.substringAfter('#', "")))
+    }
+
+    private fun http(raw: String): ProxyProfile {
+        val uri = Uri.parse(raw)
+        val host = uri.host?.trim('[', ']') ?: error("缺少服务器地址")
+        val port = uri.port.takeIf { it in 1..65535 } ?: if (uri.scheme == "https") 443 else 80
+        val parts = Uri.decode(uri.encodedUserInfo.orEmpty()).split(':', limit = 2)
+        val outbound = JSONObject().put("type", "http").put("server", host).put("server_port", port)
+        if (parts.firstOrNull().orEmpty().isNotBlank()) outbound.put("username", parts[0])
+        if (parts.size > 1) outbound.put("password", parts[1])
+        if (uri.scheme == "https") outbound.put("tls", JSONObject().put("enabled", true).put("server_name", host))
+        return ProxyProfile("http", host, port, outbound, Uri.decode(uri.fragment.orEmpty()))
+    }
+
+    private fun advancedUri(raw: String, type: String): ProxyProfile {
+        val uri = Uri.parse(raw)
+        val host = uri.host?.trim('[', ']') ?: error("缺少服务器地址")
+        val port = uri.port.takeIf { it in 1..65535 } ?: error("端口无效")
+        val userInfo = Uri.decode(uri.encodedUserInfo.orEmpty()).split(':', limit = 2)
+        val secret = userInfo.firstOrNull().orEmpty()
+        require(secret.isNotBlank()) { "缺少认证信息" }
+        val outbound = JSONObject().put("type", type).put("server", host).put("server_port", port)
+        when (type) {
+            "tuic" -> { outbound.put("uuid", secret); outbound.put("password", userInfo.getOrElse(1) { uri.getQueryParameter("password").orEmpty() }) }
+            "ssh" -> { outbound.put("user", secret); userInfo.getOrNull(1)?.let { outbound.put("password", it) } }
+            else -> outbound.put("password", secret)
+        }
+        if (type in listOf("hysteria2", "tuic", "anytls", "shadowtls", "naive")) {
+            val tls = JSONObject().put("enabled", true).put("server_name", uri.getQueryParameter("sni") ?: host)
+            if (uri.getQueryParameter("insecure") == "1" || uri.getQueryParameter("allowInsecure") == "1") tls.put("insecure", true)
+            outbound.put("tls", tls)
+        }
+        uri.getQueryParameter("obfs")?.let { outbound.put("obfs", JSONObject().put("type", it).put("password", uri.getQueryParameter("obfs-password").orEmpty())) }
+        return ProxyProfile(type, host, port, outbound, Uri.decode(uri.fragment.orEmpty()))
     }
 
     private fun addTransport(outbound: JSONObject, network: String, path: String, host: String) {

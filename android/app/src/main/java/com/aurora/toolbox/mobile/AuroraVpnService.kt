@@ -36,7 +36,7 @@ class AuroraVpnService : VpnService() {
         }
 
         tun = Builder()
-            .setSession("极光 SOCKS5 全局代理")
+            .setSession("ORVYN 智能代理")
             .setMtu(1500)
             .addAddress("198.18.0.1", 15)
             .addRoute("0.0.0.0", 0)
@@ -125,14 +125,14 @@ class AuroraVpnService : VpnService() {
     private fun notification(message: String): Notification {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "极光代理", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL_ID, "ORVYN 代理", NotificationManager.IMPORTANCE_LOW)
         )
         val openApp = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
         return Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setContentTitle("极光工作箱")
+            .setSmallIcon(com.aurora.toolbox.mobile.R.drawable.ic_status)
+            .setContentTitle("ORVYN")
             .setContentText(message)
             .setContentIntent(openApp)
             .setOngoing(true)
