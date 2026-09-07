@@ -2,6 +2,10 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id(
 android { namespace="com.aurora.toolbox.mobile"; compileSdk=35
     defaultConfig { applicationId="com.aurora.toolbox.mobile"; minSdk=26; targetSdk=35; versionCode=2; versionName="0.2.0" }
     buildFeatures { compose=true }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 }
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
