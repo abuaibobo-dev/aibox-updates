@@ -1,0 +1,1 @@
+<resources><style name="Theme.Aurora" parent="android:style/Theme.Material.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:colorAccent">#4CE4D0</item><item name="android:navigationBarColor">#07111F</item><item name="android:statusBarColor">#07111F</item></style></resources>
