@@ -20,4 +20,8 @@ contextBridge.exposeInMainWorld('toolbox', {
   appUpdate: payload => ipcRenderer.invoke('updates:app', payload),
   applyAppUpdate: payload => ipcRenderer.invoke('updates:app-apply', payload),
   open: url => ipcRenderer.invoke('system:open', url)
+  ,browser: payload => ipcRenderer.invoke('browser:control', payload)
+  ,monitor: () => ipcRenderer.invoke('system:monitor')
+  ,recovery: () => ipcRenderer.invoke('system:recovery')
+  ,openPdf: () => ipcRenderer.invoke('system:open-pdf')
 });

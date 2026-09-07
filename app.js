@@ -6,10 +6,15 @@ const tools = [
   {id:'proxy',cat:'network-cat',icon:'⇄',title:'电脑代理',desc:'保存节点、识别二维码并切换配置',color:'purple'},
   {id:'hotspot',cat:'network-cat',icon:'◉',title:'移动热点',desc:'查看 Windows 热点设置与指引',color:'orange'},
   {id:'cleanup',cat:'network-cat',icon:'✦',title:'磁盘清理',desc:'安全检查 C 盘并打开系统清理',color:'red'},
+  {id:'browser',cat:'network-cat',icon:'◉',title:'内置浏览器',desc:'隔离运行的 Chromium 网页窗口',color:'blue'},
+  {id:'monitor',cat:'network-cat',icon:'⌁',title:'系统监控',desc:'CPU、内存、运行时间与系统信息',color:'purple'},
+  {id:'reinstall',cat:'network-cat',icon:'↻',title:'系统恢复与重装',desc:'备份提醒与 Windows 官方恢复入口',color:'red'},
   {id:'ins',cat:'image',icon:'↓',title:'Instagram 图片',desc:'解析公开帖子链接与下载提示',color:'purple'},
   {id:'upscale',cat:'image',icon:'⌗',title:'图片高清放大',desc:'本地 2×/4× 插值放大与导出',color:'blue'},
   {id:'gif',cat:'image',icon:'▶',title:'GIF 制作',desc:'多张图片合成与参数设置',color:'orange'},
   {id:'screenshot',cat:'image',icon:'⌑',title:'截图与 OCR',desc:'截取屏幕并提取图片文字',color:'blue'},
+  {id:'imageconvert',cat:'image',icon:'◫',title:'图片压缩转换',desc:'本地转换 PNG、JPEG、WebP 并去元数据',color:'orange'},
+  {id:'qrcode',cat:'image',icon:'▦',title:'二维码识别',desc:'从图片本地识别二维码内容',color:'purple'},
   {id:'phone',cat:'generator',icon:'☎',title:'电话号码生成',desc:'按国家生成测试用号码',color:'blue'},
   {id:'address',cat:'generator',icon:'⌂',title:'地址生成',desc:'生成多国格式化示例地址',color:'orange'},
   {id:'enname',cat:'generator',icon:'Aa',title:'英文名字生成',desc:'性别、风格与数量可选',color:'purple'},
@@ -26,6 +31,8 @@ const tools = [
   {id:'brokers',cat:'japan',icon:'証',title:'日本证券',desc:'券商比较维度与官方入口',color:'purple'},
   {id:'notebook',cat:'office',icon:'✎',title:'加密记事本',desc:'AES-GCM 密码锁与本地保存',color:'purple'},
   {id:'counter',cat:'office',icon:'123',title:'字数统计',desc:'字符、单词、段落和阅读时间',color:'blue'},
+  {id:'devtext',cat:'office',icon:'{}',title:'文本开发工具',desc:'JSON 格式化、Base64 与 SHA-256',color:'blue'},
+  {id:'pdf',cat:'office',icon:'PDF',title:'PDF 工具',desc:'用系统默认程序打开 PDF 文件',color:'red'},
   {id:'passwordgen',cat:'office',icon:'＊',title:'安全密码生成',desc:'在本机生成高强度随机密码',color:'red'},
   {id:'translate',cat:'office',icon:'文',title:'谷歌翻译',desc:'输入文字并打开翻译结果',color:'orange'},
   {id:'totp',cat:'account',icon:'6',title:'2FA 验证码',desc:'本地生成 TOTP 动态验证码',color:'red'},
@@ -80,6 +87,13 @@ async function showTool(id){
   const t=tools.find(x=>x.id===id);$('#modalIcon').textContent=t.icon;$('#modalTitle').textContent=t.title;$('#modalDesc').textContent=t.desc;$('#modalBody').innerHTML=await bodyFor(id);modal.showModal();bindTool(id);
 }
 async function bodyFor(id){
+  if(id==='browser')return `<div class="notice">网页在隔离的 Chromium 窗口中运行，不能访问工作箱的 Node.js 或内部接口。</div><div class="field"><label>网址或搜索内容</label><input id="browserUrl" value="https://www.google.com/" placeholder="输入网址或关键词"></div><div class="actions"><button class="primary" id="openBrowser">打开内置浏览器</button><button class="secondary browser-home" data-url="https://mail.google.com/">Gmail</button><button class="secondary browser-home" data-url="https://outlook.live.com/mail/">Outlook</button><button class="secondary browser-home" data-url="https://web.telegram.org/">Telegram</button></div><div id="out"></div>`;
+  if(id==='monitor')return `<div class="result" id="monitorOut">正在读取系统状态…</div><button class="primary" id="refreshMonitor">刷新</button>`;
+  if(id==='reinstall')return `<div class="notice">此功能不会静默格式化或自动确认重装。请先备份桌面、文档、下载、浏览器资料和 2FA 恢复码，并准备 Windows 登录密码或恢复密钥。</div><div class="list"><div class="list-item"><span>1. 接通电源并备份重要文件</span></div><div class="list-item"><span>2. 确认 BitLocker 恢复密钥</span></div><div class="list-item"><span>3. 在 Windows 恢复页面选择“重置此电脑”</span></div></div><div class="actions"><button class="primary" id="openRecovery">打开 Windows 恢复设置</button></div>`;
+  if(id==='imageconvert')return `${imageForm('图片只在本机画布中处理；重新编码会移除大多数 EXIF 元数据。','convertFile')}<div class="form-row"><div class="field"><label>格式</label><select id="convertType"><option value="image/webp">WebP</option><option value="image/jpeg">JPEG</option><option value="image/png">PNG</option></select></div><div class="field"><label>质量</label><select id="convertQuality"><option value="0.6">60%</option><option value="0.8" selected>80%</option><option value="0.92">92%</option></select></div></div><button class="primary" id="convertImage">转换并下载</button><div id="out"></div>`;
+  if(id==='qrcode')return `${imageForm('使用 Chromium 原生 BarcodeDetector 在本机识别，不上传图片。','qrFile')}<button class="primary" id="readQr">识别二维码</button><div id="out"></div>`;
+  if(id==='devtext')return `<textarea id="devInput" placeholder="输入 JSON 或普通文本…"></textarea><div class="actions"><button class="secondary" id="jsonFormat">格式化 JSON</button><button class="secondary" id="b64Encode">Base64 编码</button><button class="secondary" id="b64Decode">Base64 解码</button><button class="primary" id="sha256">SHA-256</button></div><div id="out"></div>`;
+  if(id==='pdf')return `<div class="notice">使用 Windows 默认 PDF 阅读器打开本机文档；文件不会上传。</div><div class="actions"><button class="primary" id="openPdf">选择并打开 PDF</button></div>`;
   if(id==='network'){let d={hostname:'浏览器模式',platform:'请使用 Electron 启动',rows:[]};try{d=await window.toolbox.network()}catch{}return `<div class="result">主机：${d.hostname}\n系统：${d.platform}\n${d.rows.map(x=>`${x.name} · ${x.family}\n${x.address}`).join('\n\n')||'未读取到本机网卡'}</div><div class="actions"><button class="primary" id="publicIp">查询公网 IP</button></div><div id="out"></div>`}
   if(id==='phone')return `<div class="field"><label>国家／地区</label><select id="country">${Object.keys(countries).map(k=>`<option>${k}</option>`).join('')}</select></div>${quantityPicker()}<button class="primary execute" id="generate">生成电话号码</button><div id="out"></div>`;
   if(id==='address')return `<div class="field"><label>国家／地区</label><select id="country">${Object.keys(countries).map(k=>`<option>${k}</option>`).join('')}</select></div>${quantityPicker()}<button class="primary execute" id="generate">生成地址数据</button><div id="out"></div>`;
@@ -131,7 +145,17 @@ function bindTool(id){
   if(id==='notebook')bindNotebook();if(id==='totp')$('#makeTotp').onclick=makeTotp;
   if(id==='tempmail')bindTempMail();
   if(id==='settings')bindSettings();
+  if(id==='browser'){const go=u=>window.toolbox.browser({url:u||$('#browserUrl').value}).then(r=>$('#out').innerHTML=`<div class="result">已打开：${escapeHtml(r.url)}</div>`).catch(e=>$('#out').innerHTML=`<div class="notice">打开失败：${escapeHtml(e.message)}</div>`);$('#openBrowser').onclick=()=>go();document.querySelectorAll('.browser-home').forEach(b=>b.onclick=()=>go(b.dataset.url))}
+  if(id==='monitor'){const refresh=async()=>{const r=await window.toolbox.monitor();$('#monitorOut').textContent=`主机：${r.hostname}\n系统：${r.platform}\nCPU：${r.cpu}\n核心：${r.cores}\n内存：${humanBytes(r.totalMemory-r.freeMemory)} / ${humanBytes(r.totalMemory)}\n运行时间：${Math.floor(r.uptime/3600)} 小时`};$('#refreshMonitor').onclick=refresh;refresh()}
+  if(id==='reinstall')$('#openRecovery').onclick=()=>window.toolbox.recovery();
+  if(id==='imageconvert')$('#convertImage').onclick=convertImage;
+  if(id==='qrcode')$('#readQr').onclick=readQrImage;
+  if(id==='devtext')bindDevText();
+  if(id==='pdf')$('#openPdf').onclick=()=>window.toolbox.openPdf();
 }
+async function convertImage(){const f=$('#convertFile').files[0];if(!f)return toast('请先选择图片');const bmp=await createImageBitmap(f),c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);const type=$('#convertType').value,blob=await new Promise(r=>c.toBlob(r,type,Number($('#convertQuality').value))),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`converted.${type.split('/')[1]}`;a.click();$('#out').innerHTML=`<div class="result">转换完成：${bmp.width}×${bmp.height} · ${humanBytes(blob.size)}</div>`}
+async function readQrImage(){const f=$('#qrFile').files[0];if(!f)return toast('请先选择二维码图片');if(!('BarcodeDetector'in window))return $('#out').innerHTML='<div class="notice">当前系统不支持原生二维码识别。</div>';try{const codes=await new BarcodeDetector({formats:['qr_code']}).detect(await createImageBitmap(f));$('#out').innerHTML=codes.length?`<div class="result">${escapeHtml(codes.map(x=>x.rawValue).join('\n'))}</div>`:'<div class="notice">未识别到二维码。</div>'}catch(e){$('#out').innerHTML=`<div class="notice">识别失败：${escapeHtml(e.message)}</div>`}}
+function bindDevText(){const input=$('#devInput'),show=v=>$('#out').innerHTML=`<div class="result">${escapeHtml(v)}</div>`;$('#jsonFormat').onclick=()=>{try{show(JSON.stringify(JSON.parse(input.value),null,2))}catch{toast('JSON 格式无效')}};$('#b64Encode').onclick=()=>show(btoa(unescape(encodeURIComponent(input.value))));$('#b64Decode').onclick=()=>{try{show(decodeURIComponent(escape(atob(input.value.trim()))))}catch{toast('Base64 格式无效')}};$('#sha256').onclick=async()=>show([...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(input.value)))].map(x=>x.toString(16).padStart(2,'0')).join(''))}
 function generate(id){let rows=[];const n=Number($('#amount')?.value||50);if(id==='phone'){const c=countries[$('#country').value];rows=Array.from({length:n},()=>`${c.code} ${digits(c.phone)}`)}if(id==='address'){const c=countries[$('#country').value];rows=Array.from({length:n},()=>`${Math.floor(Math.random()*900)+100} ${rand(c.street)}, ${rand(c.city)}`)}if(id==='enname'){const gender=$('#nameGender').value,region=$('#nameRegion').value,names=gender==='any'?[...englishNames.male,...englishNames.female]:englishNames[gender];rows=Array.from({length:n},()=>`${rand(names)} ${rand(englishLast[region])}`)}if(id==='jpname')rows=Array.from({length:n},()=>{const f=rand(jpFirst),l=rand(jpLast);return `汉字：${l[2]} ${f[2]}\n片假名：${l[1]} ${f[1]}\n罗马字：${f[0]} ${l[0]}\n网名：${f[0].toLowerCase()}_${Math.floor(Math.random()*900+100)}`});$('#out').innerHTML=`<div class="result result-scroll"><b>已生成 ${rows.length} 条</b>\n\n${rows.join('\n\n')}</div><div class="actions"><button class="secondary" id="copyResult">复制全部结果</button></div>`;$('#copyResult').onclick=()=>copy(rows.join('\n'))}
 async function upscale(){const f=$('#upscaleFile').files[0];if(!f)return toast('请先选择图片');const img=new Image();img.onload=()=>{const s=Number($('#scale').value),c=document.createElement('canvas');c.width=img.width*s;c.height=img.height*s;c.getContext('2d').drawImage(img,0,0,c.width,c.height);const url=c.toDataURL('image/png');$('#out').innerHTML=`<div class="result">${img.width}×${img.height} → ${c.width}×${c.height}</div><img src="${url}" style="max-width:100%;border-radius:10px;margin-top:12px"><div class="actions"><a class="primary" download="upscaled.png" href="${url}">下载 PNG</a></div>`};img.src=URL.createObjectURL(f)}
 async function imageData(file,width,height){const bmp=await createImageBitmap(file),c=document.createElement('canvas');c.width=width;c.height=height;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);ctx.drawImage(bmp,0,0,width,height);return [...ctx.getImageData(0,0,width,height).data]}

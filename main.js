@@ -109,6 +109,30 @@ ipcMain.handle('system:setting', (_, page) => {
   if (!pages[page]) throw new Error('不允许的设置页面');
   return shell.openExternal(pages[page]);
 });
+let browserWindow = null;
+ipcMain.handle('browser:control', async (_, payload = {}) => {
+  let value = String(payload.url || 'https://www.google.com/').trim();
+  if (!/^https?:\/\//i.test(value)) value = `https://www.google.com/search?q=${encodeURIComponent(value)}`;
+  const parsed = new URL(value);
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('只允许打开 HTTP/HTTPS 地址');
+  if (!browserWindow || browserWindow.isDestroyed()) {
+    browserWindow = new BrowserWindow({ width: 1280, height: 820, title: '极光浏览器', backgroundColor: '#07111f', webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, partition: 'persist:aurora-browser' } });
+    browserWindow.on('closed', () => { browserWindow = null; });
+    browserWindow.webContents.setWindowOpenHandler(({ url }) => /^https?:\/\//i.test(url) ? { action: 'allow', overrideBrowserWindowOptions: { webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, partition: 'persist:aurora-browser' } } } : { action: 'deny' });
+  }
+  await browserWindow.loadURL(parsed.toString());
+  browserWindow.show(); browserWindow.focus();
+  return { url: browserWindow.webContents.getURL(), title: browserWindow.webContents.getTitle() };
+});
+ipcMain.handle('system:monitor', () => ({ hostname: os.hostname(), platform: `${os.type()} ${os.release()}`, cpu: os.cpus().map(x => x.model)[0] || '未知', cores: os.cpus().length, totalMemory: os.totalmem(), freeMemory: os.freemem(), uptime: os.uptime(), load: os.loadavg() }));
+ipcMain.handle('system:recovery', () => shell.openExternal('ms-settings:recovery'));
+ipcMain.handle('system:open-pdf', async () => {
+  const picked = await dialog.showOpenDialog({ title: '选择 PDF 文件', properties: ['openFile'], filters: [{ name: 'PDF 文档', extensions: ['pdf'] }] });
+  if (picked.canceled || !picked.filePaths[0]) return null;
+  const error = await shell.openPath(picked.filePaths[0]);
+  if (error) throw new Error(error);
+  return picked.filePaths[0];
+});
 ipcMain.handle('system:proxy', (_, payload) => {
   const key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
   const readValue = name => {
